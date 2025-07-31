@@ -339,7 +339,6 @@ setTimeout(function init () {
 
       for ( let i = 0; i < uvs2.length; i += 2 ) {
 
-         uvs2[ i ] *= 0.5;
          uvs2[ i ] += 0.5;
 
       }

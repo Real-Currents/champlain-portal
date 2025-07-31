@@ -1,11 +1,11 @@
-# WebXR Layers Start!
+# Lake Champlain Portal!
 John Hall
 
-This is a simple boostrap repo for a WebXR Layers project. I’ve seen some examples where
-developers in-the-know effortlessly incorporate WebXR Layers into their
-app, some of which are sampled here, but I haven’t come across any
-demonstrating a practical boiler plate and usage of WebXR Layers. This
-is my attempt…
+This is a simple starter app for a WebXR Layers project. I’ve seen some
+examples where developers in-the-know effortlessly incorporate WebXR
+Layers into their app, some of which are sampled here, but I haven’t
+come across any demonstrating a practical boiler plate and usage of
+WebXR Layers. This is my attempt…
 
 ## Configuration
 

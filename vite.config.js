@@ -2,7 +2,11 @@ import { NodeGlobalsPolyfillPlugin } from "@esbuild-plugins/node-globals-polyfil
 import { NodeModulesPolyfillPlugin } from "@esbuild-plugins/node-modules-polyfill";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import shader from 'rollup-plugin-shader';
+import * as fs from 'fs';
 import * as path from 'path';
+
+
+const local_certs = (fs.existsSync('./certs'));
 
 export default {
     base: "",
@@ -41,8 +45,30 @@ export default {
             }
         ]
     },
-    server: { https: true }, // Not needed for Vite 5+
-    plugins: [
+    server: (!!local_certs) ? {
+        https: {
+            key: fs.readFileSync('certs/privkey.pem'), // make certs symbolic link to dir with certification files
+            cert: fs.readFileSync('certs/fullchain.pem'), // make certs symbolic link to dir with certification files
+        },
+        host: 'dev.real-currents.com', // Allow external access
+        port: 5173
+    } : {
+        https: true // Use in combo with basicSsl plugin; not needed for Vite 5+
+    },
+    plugins: (!!local_certs) ? [
+        shader({
+            // All match files will be parsed by default,
+            // but you can also specifically include/exclude files
+            include: [
+                '**/*.glsl',
+                '**/*.vs',
+                '**/*.fs'
+            ],
+            // specify whether to remove comments
+            removeComments: true,   // default: true
+        })
+    ] : [
+        /* If certs not available, use basicSsl plugin as workaround for HTTPS */
         basicSsl({
             /** name of certification */
             name: 'test',
