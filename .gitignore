@@ -29,8 +29,9 @@ dist-ssr
 .Rproj.user
 .Rhistory
 
-data/
-_targets/
+/certs
+/data
+/_targets
 *.bak
 *.csv
 *.xlsx

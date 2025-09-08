@@ -1,32 +1,64 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
-import loadManager from "../loadManager";
+import loadManager from "../setup/setupLoadManager";
+
 import plane from "../objects/plane";
 import rotatingCube from "../objects/rotatingCube";
-import setupThreejsTutorial3dSound from "../threejs-tutorial-3d-sound";
 
-const gltfLoader = new GLTFLoader();
+// import defaultVertexShader from '../shaders/default/vertexShader.glsl';
+// import portalFragmentShader from '../shaders/portal/fragmentShader.glsl';
+
+const gltfLoader = new GLTFLoader(loadManager);
 
 const gloveGroup_01 = new THREE.Group();
 const gloveGroup_02 = new THREE.Group();
 
-const sound_data = [];
-let sound_data_loaded = false;
+function propagateClippingPlanes (object, clippingPlanes) {
+    if (object.hasOwnProperty("material")) {
+        // console.log("Apply clipping planes to ", object);
+        object.material.clippingPlanes = [
+            ...clippingPlanes
+        ];
+    }
+    if (object.hasOwnProperty("traverse")) {
+        object.traverse(function (child) {
+            propagateClippingPlanes(child, clippingPlanes);
+        });
+    } else if (object.hasOwnProperty("children")) for (let child of object.children) {
+        propagateClippingPlanes(child, clippingPlanes);
+    }
+}
 
-export default async function setupScene (renderer, scene, camera, controllers, player) {
+export default async function setupScene (scene, camera, controllers, player, videoLayer) {
 
     // Set player view
     player.add(camera);
 
+    const sceneGroup = new THREE.Group();
+
+    let sceneX = 0.0;
+    let sceneY = -0.5;
+    let sceneZ = -2.5;
+
+    sceneGroup.translateX(sceneX);
+    sceneGroup.translateY(sceneY);
+    sceneGroup.translateZ(sceneZ);
+
+    scene.add(sceneGroup);
+
     // Place objects
-    // scene.add(plane);
-    // scene.add(rotatingCube);
+    plane.translateY(-1);
+    sceneGroup.add(plane);
+    sceneGroup.add(rotatingCube);
 
     // Get rayspace from controller object and update position relative to plane (floor)
     if (controllers.hasOwnProperty("right") && controllers.right !== null) {
 
         const { gamepad, raySpace } = controllers.right;
+
+        // raySpace.getWorldPosition(plane.position);
+        // raySpace.getWorldQuaternion(plane.quaternion);
     }
 
     // Load the glove model
@@ -39,27 +71,10 @@ export default async function setupScene (renderer, scene, camera, controllers, 
         gloveGroup_02.add(gltf.scene);
     });
 
-    const wait_for_sounds_to_load = setupThreejsTutorial3dSound(renderer, scene, camera);
-
-    wait_for_sounds_to_load
-        .then((sounds) => {
-            for (const sp of sounds) {
-                sp
-                    .then(async (sound) => {
-                        console.log("sound:", (await sound));
-
-                        sound_data.push(sound);
-                    })
-            }
-        });
-
-    return function updateScene (currentSession, delta, time, sceneDataIn, sceneDataOut) {
+    return function (currentSession, delta, time, sceneDataIn, sceneDataOut, clippingPlanes) {
 
         const data_out = {
-            events: [],
-            sound_data: [
-                ...sound_data
-            ]
+            events: []
         };
 
         if (controllers.hasOwnProperty("left") && controllers.left !== null) {
@@ -81,8 +96,8 @@ export default async function setupScene (renderer, scene, camera, controllers, 
                 raySpace_02 = controllers.right.raySpace,
                 mesh_02 = controllers.right.mesh;
 
-            raySpace_02.getWorldPosition(plane.position);
-            raySpace_02.getWorldQuaternion(plane.quaternion);
+            // raySpace_02.getWorldPosition(plane.position);
+            // raySpace_02.getWorldQuaternion(plane.quaternion);
 
             // Attach the glove to the right controller
             if (!raySpace_02.children.includes(gloveGroup_02)) {
@@ -91,44 +106,16 @@ export default async function setupScene (renderer, scene, camera, controllers, 
             }
         }
 
+        if (typeof sceneDataIn === "object" && sceneDataIn != null) {
+            console.log("sceneDataIn:", sceneDataIn);
+        }
+
         rotatingCube.rotX(0.01);
         rotatingCube.rotY(0.01);
 
-        if (data_out.sound_data.length > 0) {
-            for (const sound of data_out["sound_data"]) {
-                sound.raf_(delta); // request animation frame for sound
-            }
-
-            if (!sound_data_loaded) {
-
-                console.log(data_out);
-
-                data_out.events.push({
-                    "action": "sounds_ready"
-                });
-
-                sound_data_loaded = true;
-            }
-        }
-
-        if (typeof sceneDataIn === "object" && sceneDataIn != null) {
-            console.log("sceneDataIn:", sceneDataIn);
-            // loadManager.addLoadHandler(async () => {
-
-                if ("events" in sceneDataIn) {
-                    for (const event of sceneDataIn["events"]) {
-                        if ("action" in event) {
-                            if (event["action"] == "play_sounds") {
-                                for (const sound of data_out["sound_data"]) {
-                                    sound.play(); // play sound
-                                }
-                            }
-                        }
-                    }
-                }
-
-            // });
-        }
+        // if (!!clippingPlanes && clippingPlanes !== null && clippingPlanes.length > 0) {
+        //     propagateClippingPlanes (sceneGroup, clippingPlanes);
+        // }
 
         if (typeof sceneDataOut === "function") {
             sceneDataOut(data_out);

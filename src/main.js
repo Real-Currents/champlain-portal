@@ -2,366 +2,522 @@ import * as THREE from 'three';
 
 import { XRDevice, metaQuest3 } from 'iwer';
 import { DevUI } from '@iwer/devui';
-import { GamepadWrapper } from 'gamepad-wrapper';
-import { XRControllerModelFactory } from "three/examples/jsm/webxr/XRControllerModelFactory";
+import { GamepadWrapper, XR_BUTTONS } from 'gamepad-wrapper';
+import { OrbitControls } from 'three/addons/controls/OrbitControls';
+import { XRControllerModelFactory } from "three/addons/webxr/XRControllerModelFactory";
 
-import { VRButton } from "three/examples/jsm/webxr/VRButton.js";
-import { XRButton } from "three/examples/jsm/webxr/XRButton.js";
+import { HTMLMesh } from "three/addons/interactive/HTMLMesh";
+import Stats from "three/addons/libs/stats.module";
+
+import setupScene from "./setup/setupScene";
+import loadManager from "./setup/setupLoadManager";
+import setupPortalClippingPlanes from "./setup/setupPortalClippingPlanes";
+import setupVideoLayerManager from "./setup/setupVideoLayerManager";
+import {checkControllerAction} from "./controllers";
 
 // These definition make it possible to try different version THREE in the package deps
 const PlaneGeometry = ("PlaneBufferGeometry" in THREE) ?
-   THREE.PlaneBufferGeometry : THREE.PlaneGeometry;
+    THREE.PlaneBufferGeometry : THREE.PlaneGeometry;
 
 const SphereGeometry = ("SphereBufferGeometry" in THREE) ?
-   THREE.SphereBufferGeometry : THREE.SphereGeometry;
+    THREE.SphereBufferGeometry : THREE.SphereGeometry;
 
 let currentSession = null;
-let initWithLayers = true;
+let initXRLayers = true;
+let waiting_for_confirmation = false;
 
 setTimeout(function init () {
 
-   console.log("Initiate WebXR Layers scene!");
+    console.log("Initiate WebXR Layers scene!");
 
-   let camera, clock, scene, renderer, player;
+    let camera, renderer, player, video, videoLayerManager;
 
-   const videoWidth = 2064;
-   const videoHeight = 2208;
-   const videoReducer = 0.090579710
+    const body = document.body;
 
-   const previewWindow = {
-      width: window.innerWidth, // / 2, // 640,
-      height: window.innerHeight + 10, // 480,
-   };
+    const container = document.createElement('div');
 
-   const sessionInit = {
-      optionalFeatures: [ //(initWithLayers) ? [
-      //    "local-floor",
-      //    // "bounded-floor",
-      //    // "hand-tracking",
-      //    "layers"
-      // ] :  [
-         "local-floor"
-      ],
-      requiredFeatures: [
-         // "webgpu"
-      ]
-   };
+    body.appendChild(container);
 
-   async function onSessionStarted (session) {
-      const useLayers =  initWithLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
-      await renderer.xr.setSession(session, useLayers);
-      currentSession = session;
-      currentSession.addEventListener("end", onSessionEnded);
-   }
+    const clock = new THREE.Clock();
 
-   function onSessionEnded () {
-      currentSession.removeEventListener("end", onSessionEnded);
-      currentSession = null;
-   }
+    const canvas = window.document.createElement('canvas');
 
-   function onWindowResize () {
+    const previewWindow = {
+        width: window.innerWidth, // / 2, // 640,
+        height: window.innerHeight + 10, // 480,
+    };
+    container.style = `display: block; background-color: #000; max-width: ${previewWindow.width}px; max-height: ${previewWindow.height}px; overflow: hidden;`;
 
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer.setPixelRatio( window.devicePixelRatio );
+    renderer.setSize( previewWindow.width, previewWindow.height);
+    // renderer.setClearAlpha( 1 );
+    // renderer.setClearColor( new THREE.Color( 0 ), 0 );
+    // renderer.setSize( previewWindow.innerWidth, previewWindow.innerHeight );
+    // These are deprecated but still work
+    // renderer.outputEncoding = THREE.sRGBEncoding;
+    // renderer.outputEncoding = THREE.LinearEncoding;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.xr.enabled = true;
+    renderer.xr.setReferenceSpaceType('local');
 
-      renderer.setSize( window.innerWidth, window.innerHeight );
+    container.appendChild( renderer.domElement );
 
-   }
+    camera = new THREE.PerspectiveCamera( 70, previewWindow.width / previewWindow.height, 1, 2000 );
+    camera.layers.enable( 1 ); // render left view when no stereo available
+    camera.position.set(0.0, 0.0, 0.0);
 
-   function animate () {
+    window.addEventListener('resize', function () {
 
-      renderer.setAnimationLoop( render );
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
 
-   }
+        renderer.setSize( window.innerWidth, window.innerHeight );
 
-   function render () {
+    }, false);
 
-      renderer.render( scene, camera );
+    player = new THREE.Group();
 
-   }
+    const scene = new THREE.Scene();
+    const controllerModelFactory = new XRControllerModelFactory();
+    const controllers = {
+        left: null,
+        right: null,
+    };
 
-   async function getXRSession (xr) {
-
-      console.log("xr", `${JSON.stringify(xr)}`);
+    for (let i = 0; i < 2; i++) {
+        const raySpace = renderer.xr.getController(i);
+        const gripSpace = renderer.xr.getControllerGrip(i);
+        const mesh = controllerModelFactory.createControllerModel(gripSpace);
 
-      let session = null;
+        gripSpace.add(mesh);
 
-      const useLayers =  initWithLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
-      try {
-         if (!useLayers) {
-            session = await (xr.requestSession("immersive-vr", sessionInit));
-         } else {
-            session = await (xr.requestSession("immersive-ar", sessionInit));
-         }
-      } catch (e) {
-         session = await (xr.requestSession("immersive-vr", sessionInit));
-      } finally {
-
-         previewWindow.width = window.innerWidth;
-         previewWindow.height = window.innerHeight;
-
-         renderer.setSize(previewWindow.width, previewWindow.height);
-
-         camera.aspect = previewWindow.width / previewWindow.height;
-         camera.updateProjectionMatrix();
-
-         return session;
-      }
-   }
-
-
-   const xr_button = document.createElement("button");
-   xr_button.className = "xr-button";
-   xr_button.disabled = true;
-   xr_button.innerHTML = "Preparing...";
-   xr_button.addEventListener('click', async () => {
-
-      console.log("XR Button clicked");
-
-      const delta = clock.getDelta();
-      const time = clock.getElapsedTime();
-
-
-
-      // Does xr object exist?
-      let nativeWebXRSupport = "xr" in navigator;
-
-      try {
-
-         if (nativeWebXRSupport) nativeWebXRSupport = (
-             // Does xr object support sessions?
-             await navigator.xr.isSessionSupported( 'immersive-ar' ) ||
-             await navigator.xr.isSessionSupported('immersive-vr') ||
-             nativeWebXRSupport
-         )
-
-      } catch (e) {
-         console.log(e.message, navigator);
-      }
-
-      // If no XR/VR available, setup Immersive Web Emulation Runtime (iwer) and emulated XR device (@iwer/devui)
-      if (!nativeWebXRSupport) {
-         const xrDevice = new XRDevice(metaQuest3);
-         xrDevice.installRuntime();
-         xrDevice.fovy = (75 / 180) * Math.PI;
-         xrDevice.ipd = 0;
-         window.xrdevice = xrDevice;
-         xrDevice.controllers.right.position.set(0.15649, 1.43474, -0.38368);
-         xrDevice.controllers.right.quaternion.set(
-             0.14766305685043335,
-             0.02471366710960865,
-             -0.0037767395842820406,
-             0.9887216687202454,
-         );
-         xrDevice.controllers.left.position.set(-0.15649, 1.43474, -0.38368);
-         xrDevice.controllers.left.quaternion.set(
-             0.14766305685043335,
-             0.02471366710960865,
-             -0.0037767395842820406,
-             0.9887216687202454,
-         );
-         new DevUI(xrDevice);
-      }
-
-      const session = await getXRSession(navigator.xr);
-
-      await onSessionStarted(session);
-
-      // Set camera position
-      // camera.position.z = 0;
-      camera.position.y = 0;
-
-      player.position.z = camera.position.z;
-      player.position.y = camera.position.y;
-
-      const initSceneDataIn = {
-         "events": [
-            {
-               "action": "play_sounds"
-            }
-         ]
-      }
-
-      // updateScene(currentSession, delta, time, initSceneDataIn, null);
-
-      video.play();
-
-      render(renderer);
-
-      // container.style = `display: block; color: #FFF; font-size: 24px; text-align: center; background-color: #000; height: 100vh; max-width: ${previewWindow.width}px; max-height: ${previewWindow.height}px; overflow: hidden;`;
-      xr_button.innerHTML = "Reload";
-      xr_button.onclick = function () {
-         xr_button.disabled = true;
-         window.location.reload();
-      };
-   });
-
-   function init() {
-
-      const body = document.body,
-          container = document.createElement('div');
-      container.style = `display: block; background-color: #000; max-width: ${previewWindow.width}px; max-height: ${previewWindow.height}px; overflow: hidden;`;
-      body.appendChild(container);
-
-      console.log(container);
-
-      const canvas= window.document.createElement('canvas');
-
-      canvas.addEventListener("webglcontextlost", (event) => {
-         /* The context has been lost but can be restored */
-         event.canceled = true;
-
-         console.log("webglcontextlost");
-      });
-
-      /* When the GL context is reconnected, reload the resources for the
-         current scene. */
-      canvas.addEventListener("webglcontextrestored", (event) => {
-         // ... loadSceneResources(currentScene);
-
-         console.log("webglcontextrestored");
-      });
-
-
-      // const container = document.getElementById( 'container' );
-      container.addEventListener( 'click', function () {
-
-         video.play();
-
-      } );
-
-      clock = new THREE.Clock();
-
-      camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 2000 );
-      camera.layers.enable( 1 ); // render left view when no stereo available
-
-      renderer = new THREE.WebGLRenderer();
-      renderer.setPixelRatio( window.devicePixelRatio );
-      renderer.setSize( previewWindow.width, previewWindow.height);
-      renderer.xr.enabled = true;
-      renderer.xr.setReferenceSpaceType( 'local' );
-      container.appendChild( renderer.domElement );
-
-      window.addEventListener( 'resize', onWindowResize, false );
-
-      // video
-
-      const video = document.getElementById( 'video' );
-      // video.play();
-
-      const texture = new THREE.Texture( video );
-
-      setInterval( function () {
-
-         if ( video.readyState >= video.HAVE_CURRENT_DATA ) {
-
-            texture.needsUpdate = true;
-
-         }
-
-      }, 1000 / 24 );
-
-      scene = new THREE.Scene();
-      // scene.background = new THREE.Color( 0x101010 );
-
-      player = new THREE.Group();
-      scene.add(player);
-
-      const controllerModelFactory = new XRControllerModelFactory();
-      const controllers = {
-         left: null,
-         right: null,
-      };
-
-      for (let i = 0; i < 2; i++) {
-         const raySpace = renderer.xr.getController(i);
-         const gripSpace = renderer.xr.getControllerGrip(i);
-         const mesh = controllerModelFactory.createControllerModel(gripSpace);
-
-         gripSpace.add(mesh);
-
-         gripSpace.addEventListener('connected', (e) => {
+        gripSpace.addEventListener('connected', (e) => {
 
             raySpace.visible = true;
             gripSpace.visible = true;
             const handedness = e.data.handedness;
             controllers[handedness] = {
-               gamepad: new GamepadWrapper(e.data.gamepad),
-               raySpace,
-               gripSpace,
-               mesh
+                gamepad: new GamepadWrapper(e.data.gamepad),
+                raySpace,
+                gripSpace,
+                mesh
             };
-         });
+        });
 
-         gripSpace.addEventListener('disconnected', (e) => {
+        gripSpace.addEventListener('disconnected', (e) => {
             raySpace.visible = false;
             gripSpace.visible = false;
-            const handedness = e.data.handedness;
-            controllers[handedness] = null;
-         });
+            // const handedness = e.data.handedness;
+            // controllers[handedness] = null;
+            for (const h in controllers) {
+                if (controllers[h] !== null) controllers[h] = null;
+            }
+        });
 
-         player.add(raySpace, gripSpace);
-         // raySpace.visible = false;
-         // gripSpace.visible = false;
-      }
+        player.add(raySpace, gripSpace);
+        // raySpace.visible = false;
+        // gripSpace.visible = false;
+    }
 
-      // left
+    // Setup Stats
+    const stats = new Stats();
+    stats.showPanel(0);
+    stats.dom.style.maxWidth = "64px";
+    stats.dom.style.minWidth = "60px";
+    stats.dom.style.backgroundColor = "black";
+    document.body.appendChild(stats.dom);
 
-      // const geometry1 = new SphereGeometry( 500, 60, 40 );
-      const geometry1 = new PlaneGeometry( 5, videoHeight / videoWidth * 5, 60, 40 );
-      // invert the geometry on the x-axis so that all of the faces point inward
-      // geometry1.scale( - 1, 1, 1 );
-      geometry1.translate(videoReducer, 0, -5)
+    const statsMesh = new HTMLMesh( stats.dom );
+    // statsMesh.position.x = -1.5;
+    // statsMesh.position.y = 0.5;
+    // statsMesh.position.z = -2.0;
+    statsMesh.position.set(-1.5, 0.5, -2.0);
+    statsMesh.rotation.y = Math.PI / 4;
+    statsMesh.scale.setScalar(4);
+    statsMesh.material.colorWrite = true;
+    statsMesh.material.transparent = false;
 
-      const uvs1 = geometry1.attributes.uv.array;
+    // video
 
-      for ( let i = 0; i < uvs1.length; i += 2 ) {
+    const videoWidth = 2064;
+    const videoHeight = 2208;
+    const videoReducer = 0.090579710;
 
-         uvs1[ i ] *= 0.5;
+    video = document.getElementById( 'video' );
+    // document.body.appendChild(video);
+    // video.loop = true;
+    // video.src = 'assets/videos/Lake_Champlain.webm';
+    // video.src = 'assets/videos/Lake_Champlain.mp4';
+    // video.width = previewWindow.width;
+    // video.height = previewWindow.height;
+    // video.play();
 
-      }
+    container.addEventListener( 'click', function () {
+        video.play();
+    });
 
-      const material1 = new THREE.MeshBasicMaterial( { map: texture } );
+    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710, 0.0, 0.5);
 
-      const mesh1 = new THREE.Mesh( geometry1, material1 );
-      // mesh1.rotation.y = - Math.PI / 2;
-      mesh1.layers.set( 1 ); // display in left eye only
-      scene.add( mesh1 );
+    container.append(loadManager.div);
 
-      // right
+    const controls = new OrbitControls(camera, container);
+    controls.target.set(0, 0.0, -0.5);
+    // controls.update();
 
-      // const geometry2 = new SphereGeometry( 500, 60, 40 );
-      const geometry2 = new PlaneGeometry( 5, videoHeight / videoWidth * 5, 60, 40 );
-      // geometry2.scale( - 1, 1, 1 );
-      geometry2.translate(-videoReducer, 0, -5)
+    async function setupEnvironment (renderer, scene, videoLayerManager) {
 
-      const uvs2 = geometry2.attributes.uv.array;
+        scene.add(player);
 
-      for ( let i = 0; i < uvs2.length; i += 2 ) {
+        scene.add(statsMesh);
 
-         uvs2[ i ] += 0.5;
+        currentSession = null;
 
-      }
+        // const sceneGroup = new THREE.Group();
+        //
+        // let sceneX = 0.0;
+        // let sceneY = -0.5;
+        // let sceneZ = -5.0;
+        //
+        // sceneGroup.translateX(sceneX);
+        // sceneGroup.translateY(sceneY);
+        // sceneGroup.translateZ(sceneZ);
+        //
+        // scene.add(sceneGroup);
 
-      const material2 = new THREE.MeshBasicMaterial( { map: texture } );
+        videoLayerManager.initVideoLayer(false, renderer, scene, currentSession);
 
-      const mesh2 = new THREE.Mesh( geometry2, material2 );
-      // mesh2.rotation.y = - Math.PI / 2;
-      mesh2.layers.set( 2 ); // display in right eye only
-      scene.add( mesh2 );
+        const updateScene = await setupScene(scene, camera, controllers, player, videoLayerManager);
 
-      // document.body.appendChild( VRButton.createButton( renderer ) );
-      // document.body.appendChild( XRButton.createButton( renderer ) );
-      document.body.appendChild(xr_button);
+        renderer.setAnimationLoop(function render (t, frame ) {
 
-      xr_button.innerHTML = "Enter XR";
-      xr_button.style.opacity = 0.75;
-      xr_button.disabled = false;
-      delete xr_button.disabled;
+            const data = {};
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
 
-   }
+            const xr = renderer.xr;
+            const gl = renderer.getContext();
 
-   init();
-   animate();
+            waiting_for_confirmation = checkControllerAction(controllers, data, currentSession, waiting_for_confirmation);
+
+            stats.begin();
+
+            const clippingPlanes  = setupPortalClippingPlanes(renderer, camera);
+
+            let guiLayer,
+                equirectLayer,
+                quadLayerPlain,
+                quadLayerMips,
+                quadLayerVideo;
+
+            if (
+                currentSession !== null
+                && currentSession.renderState.layers !== undefined
+                && currentSession.hasMediaLayer === undefined
+                && initXRLayers && (
+                    typeof XRWebGLBinding !== 'undefined'
+                    && 'createProjectionLayer' in XRWebGLBinding.prototype
+                )
+            ) {
+
+                console.log("Initialize media layer on currentSession:", currentSession);
+
+                currentSession.hasMediaLayer = true;
+
+                console.log("Make gl context XR compatible: ", gl.makeXRCompatible);
+
+                gl.makeXRCompatible().then(() => {
+
+                    const glBinding = xr.getBinding(); // returns XRWebGLBinding
+
+                    currentSession.requestReferenceSpace('local-floor').then((refSpace) => {
+
+                     // Create GUI layer.
+                     guiLayer = glBinding.createQuadLayer({
+                        width: statsMesh.geometry.parameters.width,
+                        height: statsMesh.geometry.parameters.height,
+                        viewPixelWidth: statsMesh.material.map.image.width,
+                        viewPixelHeight: statsMesh.material.map.image.height,
+                        space: refSpace,
+                        transform: new XRRigidTransform(statsMesh.position, statsMesh.quaternion)
+                     });
+                     
+                     quadLayerVideo = videoLayerManager.initVideoLayer(true, renderer, scene, currentSession, refSpace);
+
+                     videoLayerManager.videoLayerInitialized = true;
+
+                     currentSession.updateRenderState({
+                        layers: (!!currentSession.renderState.layers.length > 0) ? [
+                            quadLayerVideo,
+                            // equirectLayerVideo,
+                            guiLayer,
+                            currentSession.renderState.layers[0]
+                        ] : [
+                            quadLayerVideo,
+                            // equirectLayerVideo,
+                            guiLayer
+                        ]
+                     });
+
+                  });
+               });
+
+            }
+
+            if (currentSession !== null && !!guiLayer && (guiLayer.needsRedraw || guiLayer.needsUpdate)) {
+
+               const glayer = xr.getBinding().getSubImage(guiLayer, frame);
+               renderer.state.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
+               gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+               const canvas = statsMesh.material.map.image;
+               gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+               guiLayer.needsUpdate = false;
+
+            }
+
+            // if (currentSession !== null) renderer.clippingPlanes =  [
+            //     ...clippingPlanes
+            // ];
+
+            updateScene(
+                currentSession,
+                delta,
+                time,
+                (data.hasOwnProperty("action")) ? data : null,
+                null,
+                [
+                    ...clippingPlanes
+                ]
+            );
+
+            renderer.render(scene, camera);
+
+            stats.end();
+
+            statsMesh.material.map.update();
+            // if (!!guiLayer) guiLayer.needsUpdate = true;
+        });
+
+        return renderer;
+    }
+
+    async function getXRSession (xr) {
+
+        console.log("xr", `${JSON.stringify(xr)}`);
+
+        let session = null;
+
+        const useXRLayers =  initXRLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
+        try {
+            if (!useXRLayers) {
+                session = await (xr.requestSession("immersive-vr", {
+                    optionalFeatures: [
+                        "local-floor"
+                    ]
+                }));
+            } else {
+                session = await (xr.requestSession("immersive-ar", {
+                    optionalFeatures: [
+                        // "bounded-floor",
+                        // "hand-tracking",
+                        "layers"
+                    ],
+                    requiredFeatures: [
+                        // "webgpu",
+                        "local-floor"
+                    ]
+                }));
+            }
+        } catch (e) {
+            session = await (xr.requestSession("immersive-vr", {
+                optionalFeatures: [
+                    "local-floor"
+                ]
+            }));
+        } finally {
+
+            previewWindow.width = window.innerWidth;
+            previewWindow.height = window.innerHeight;
+
+            renderer.setSize(previewWindow.width, previewWindow.height);
+
+            camera.aspect = previewWindow.width / previewWindow.height;
+            camera.updateProjectionMatrix();
+
+            session.requestReferenceSpace("local").then((xrReferenceSpace) => {
+                session.requestAnimationFrame((time, xrFrame) => {
+                    const viewer = xrFrame.getViewerPose(xrReferenceSpace);
+
+                    const tick = time % 3333;
+
+                    if (tick < 1) try {
+                        for (const xrView of viewer.views) {
+                            const xrViewport = XRWebGLLayer.getViewport(xrView);
+                            console.log({
+                                xrReferenceSpace,
+                                xrView,
+                                xrViewport
+                            });
+                        }
+                    } catch (e) {
+                        console.log({
+                            error: e
+                        });
+                    }
+                });
+            });
+
+            return session;
+        }
+    }
+
+    async function onSessionStarted (session, config) {
+        try {
+            await renderer.xr.setSession(session, config.useXRLayers);
+        } catch (e) {
+            console.log("Error:", e);
+        }
+        currentSession = session;
+        currentSession["config"] = config;
+        currentSession.addEventListener("end", onSessionEnded);
+
+        if (!!config && config.useXRLayers && !!config.videoLayerManager) { // && config.videoLayerManager.videoLayerInitialized) {
+            // Transition to WebXRLayer
+            config.videoLayerManager.clearVideoLayer(!config.useXRLayers, renderer, scene, session);
+            // config.videoLayerManager.initVideoLayer(config.useXRLayers, renderer, scene, session);
+            // config.videoLayerManager.videoLayerInitialized = true;
+        }
+
+        console.log("Init video layer: ", config.videoLayerManager.videoLayerInitialized)
+
+        video.play();
+    }
+
+    function onSessionEnded (session) {
+
+        const config = currentSession["config"];
+
+        console.log("Ended WebXR session!", session, config);
+
+        currentSession.removeEventListener("end", onSessionEnded);
+        currentSession = null;
+
+        if (videoLayerManager.videoLayerInitialized && !!config.videoLayerManager) {
+            // Transition to WebGLLayer
+            console.log("Clear video layer");
+            config.videoLayerManager.clearVideoLayer(true, renderer, scene, session);
+            console.log("Init video layer");
+            config.videoLayerManager.initVideoLayer(false, renderer, scene, session);
+        }
+    }
+
+    const xr_button = document.createElement("button");
+    xr_button.className = "xr-button";
+    xr_button.disabled = true;
+    xr_button.innerHTML = "Preparing...";
+    xr_button.addEventListener('click', async () => {
+
+        console.log("XR Button clicked");
+
+        const delta = clock.getDelta();
+        const time = clock.getElapsedTime();
+
+        // Does xr object exist?
+        let nativeWebXRSupport = "xr" in navigator;
+
+        try {
+
+            if (nativeWebXRSupport) nativeWebXRSupport = (
+                // Does xr object support sessions?
+                await navigator.xr.isSessionSupported( 'immersive-ar' ) ||
+                await navigator.xr.isSessionSupported('immersive-vr') ||
+                nativeWebXRSupport
+            )
+
+        } catch (e) {
+            console.log(e.message, navigator);
+        }
+
+        // If no XR/VR available, setup Immersive Web Emulation Runtime (iwer) and emulated XR device (@iwer/devui)
+        if (!nativeWebXRSupport) {
+            const xrDevice = new XRDevice(metaQuest3);
+            xrDevice.installRuntime();
+            xrDevice.fovy = (75 / 180) * Math.PI;
+            xrDevice.ipd = 0;
+            window.xrdevice = xrDevice;
+            xrDevice.controllers.right.position.set(0.15649, 1.43474, -0.38368);
+            xrDevice.controllers.right.quaternion.set(
+                0.14766305685043335,
+                0.02471366710960865,
+                -0.0037767395842820406,
+                0.9887216687202454,
+            );
+            xrDevice.controllers.left.position.set(-0.15649, 1.43474, -0.38368);
+            xrDevice.controllers.left.quaternion.set(
+                0.14766305685043335,
+                0.02471366710960865,
+                -0.0037767395842820406,
+                0.9887216687202454,
+            );
+            new DevUI(xrDevice);
+
+        }
+
+        const useXRLayers =  initXRLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
+
+        const session = await getXRSession(navigator.xr);
+
+        await onSessionStarted(session, { useXRLayers, videoLayerManager });
+
+        // Set camera position
+        // camera.position.z = 0;
+        camera.position.y = 0;
+
+        player.position.z = camera.position.z;
+        // player.position.y = camera.position.y;
+
+        const initSceneDataIn = {
+            "events": [
+                {
+                    "action": "play_sounds"
+                }
+            ]
+        }
+
+        // container.style = `display: block; color: #FFF; font-size: 24px; text-align: center; background-color: #000; height: 100vh; max-width: ${previewWindow.width}px; max-height: ${previewWindow.height}px; overflow: hidden;`;
+        xr_button.innerHTML = "Reload";
+        xr_button.onclick = function () {
+            xr_button.disabled = true;
+            window.location.reload();
+        };
+    });
+
+    document.body.appendChild(xr_button);
+
+    xr_button.innerHTML = "Enter XR";
+    xr_button.style.opacity = 0.75;
+    xr_button.disabled = false;
+    delete xr_button.disabled;
+
+    canvas.addEventListener("webglcontextlost", (event) => {
+        /* The context has been lost but can be restored */
+        event.canceled = true;
+
+        console.log("webglcontextlost");
+    });
+
+    /* When the GL context is reconnected, reload the resources for the
+       current scene. */
+    canvas.addEventListener("webglcontextrestored", (event) => {
+        // ... loadSceneResources(currentScene);
+        setupEnvironment(renderer, scene, videoLayerManager);
+
+        console.log("webglcontextrestored");
+    });
+
+    setupEnvironment(renderer, scene, videoLayerManager)
+        .then((renderer) => {
+            console.log("WebXR has been initialized with renderer: ", renderer);
+        });
 
 }, 533);
