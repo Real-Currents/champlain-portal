@@ -1,6 +1,8 @@
 import * as THREE from "three";
+import meshMaterial from "../material/meshMaterial";
+import planeGeometry from "../geometry/planeGeometry";
 
-// These definition make it possible to try different version THREE in the package deps
+// These definition make it possible to try different versions THREE in the package deps
 const PlaneGeometry = ("PlaneBufferGeometry" in THREE) ?
     THREE.PlaneBufferGeometry : THREE.PlaneGeometry;
 
@@ -28,7 +30,7 @@ export default function setupVideoLayerManager (
 
     let textureUpdateInterval = 0;
 
-    let videoLayerInitialized = false;
+    let initialized = false;
 
     function initVideoLayer (withWebXRLayer = false, renderer = null, scene = null, session = null, refSpace = null) {
 
@@ -45,10 +47,10 @@ export default function setupVideoLayerManager (
             // left
 
             // const geometry1 = new SphereGeometry( 500, 60, 40 );
-            const geometry1 = new PlaneGeometry(meshWidth, meshHeight, 60, 40);
+            const geometry1 = new PlaneGeometry(meshWidth, meshHeight, 1, 1);
             // invert the geometry on the x-axis so that all of the faces point inward
             // geometry1.scale( - 1, 1, 1 );
-            geometry1.translate(videoCenterX + videoReducer, videoCenterY, videoDepthZ);
+            geometry1.translate(videoCenterX + videoReducer, videoCenterY + meshHeight / 2, videoDepthZ);
 
             const uvs1 = geometry1.attributes.uv.array;
 
@@ -59,18 +61,20 @@ export default function setupVideoLayerManager (
             }
 
             const material1 = new THREE.MeshBasicMaterial({map: texture});
+            // const material1 = meshMaterial;
 
             const mesh1 = new THREE.Mesh(geometry1, material1);
-            // mesh1.rotation.y = - Math.PI / 2;
+            // const mesh1 = new THREE.Mesh(planeGeometry, material1);
+
             mesh1.layers.set(1); // display in left eye only
             webGLVideo.add(mesh1);
 
             // right
 
             // const geometry2 = new SphereGeometry( 500, 60, 40 );
-            const geometry2 = new PlaneGeometry(meshWidth, meshHeight, 60, 40);
+            const geometry2 = new PlaneGeometry(meshWidth, meshHeight, 1, 1);
             // geometry2.scale( - 1, 1, 1 );
-            geometry2.translate(videoCenterX - videoReducer, videoCenterY, videoDepthZ)
+            geometry2.translate(videoCenterX - videoReducer, videoCenterY + meshHeight / 2, videoDepthZ)
 
             const uvs2 = geometry2.attributes.uv.array;
 
@@ -84,15 +88,21 @@ export default function setupVideoLayerManager (
             }
 
             const material2 = new THREE.MeshBasicMaterial({map: texture});
+            // const material2 = meshMaterial;
 
             const mesh2 = new THREE.Mesh(geometry2, material2);
-            // mesh2.rotation.y = - Math.PI / 2;
+            // const mesh2 = new THREE.Mesh(planeGeometry, material2);
+
             mesh2.layers.set(2); // display in right eye only
             webGLVideo.add(mesh2);
 
             console.log("Add video layer using WebGL plane geometry");
 
             scene.add(webGLVideo);
+
+            initialized = true;
+
+            return webGLVideo;
 
         } else if (refSpace !== null) {
 
@@ -153,15 +163,15 @@ export default function setupVideoLayerManager (
             // webXRLayerVideo.lowerVerticalAngle = -(Math.PI * videoAngle / 180) * 0.5; // -Math.PI / 2.0 * 0.5;
             // webXRLayerVideo.radius = eqrtRadius;
 
+            initialized = true;
+
             return webXRLayerVideo;
         }
-
-        videoLayerInitialized = true;
     }
 
     function clearVideoLayer (withWebXRLayer = false, renderer = null, scene = null) {
 
-        videoLayerInitialized = false;
+        initialized = false;
 
         if (!withWebXRLayer) {
 
@@ -176,12 +186,34 @@ export default function setupVideoLayerManager (
         textureUpdateInterval = 0;
     }
 
-    return ({
-        initVideoLayer,
-        clearVideoLayer,
-        video,
-        videoLayerInitialized,
-        webGLVideo,
-        webXRLayerVideo
-    });
+    return (
+        Object.defineProperty(
+            Object.defineProperty(
+                {
+                    initVideoLayer,
+                    clearVideoLayer,
+                    webGLVideo,
+                    webXRLayerVideo
+                },
+                'videoLayerInitialized',
+                {
+                    get() {
+                        return initialized;
+                    },
+                    set(new_state) {
+                        initialized = new_state;
+                    }
+                }
+            ),
+            'video',
+            {
+                get() {
+                    return video;
+                },
+                set(new_video) {
+                    video = new_video;
+                }
+            }
+        )
+    );
 }

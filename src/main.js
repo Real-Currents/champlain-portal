@@ -1,89 +1,105 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 import { XRDevice, metaQuest3 } from 'iwer';
 import { DevUI } from '@iwer/devui';
 import { GamepadWrapper, XR_BUTTONS } from 'gamepad-wrapper';
 import { OrbitControls } from 'three/addons/controls/OrbitControls';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment';
 import { XRControllerModelFactory } from "three/addons/webxr/XRControllerModelFactory";
 
 import { HTMLMesh } from "three/addons/interactive/HTMLMesh";
 import Stats from "three/addons/libs/stats.module";
 
 import setupScene from "./setup/setupScene";
-import loadManager from "./setup/setupLoadManager";
-import setupPortalClippingPlanes from "./setup/setupPortalClippingPlanes";
 import setupVideoLayerManager from "./setup/setupVideoLayerManager";
 import {checkControllerAction} from "./controllers";
 
-// These definition make it possible to try different version THREE in the package deps
-const PlaneGeometry = ("PlaneBufferGeometry" in THREE) ?
-    THREE.PlaneBufferGeometry : THREE.PlaneGeometry;
-
-const SphereGeometry = ("SphereBufferGeometry" in THREE) ?
-    THREE.SphereBufferGeometry : THREE.SphereGeometry;
-
 let currentSession = null;
-let initXRLayers = true;
+let initXRLayers = false;
 let waiting_for_confirmation = false;
 
-setTimeout(function init () {
-
-    console.log("Initiate WebXR Layers scene!");
-
-    let camera, renderer, player, video, videoLayerManager;
-
-    const body = document.body;
-
-    const container = document.createElement('div');
-
-    body.appendChild(container);
+async function initRenderer (setupScene = (scene, camera, controllers, player, videoManager) => {}) {
 
     const clock = new THREE.Clock();
-
-    const canvas = window.document.createElement('canvas');
-
-    const previewWindow = {
-        width: window.innerWidth, // / 2, // 640,
-        height: window.innerHeight + 10, // 480,
-    };
-    container.style = `display: block; background-color: #000; max-width: ${previewWindow.width}px; max-height: ${previewWindow.height}px; overflow: hidden;`;
-
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-    renderer.setPixelRatio( window.devicePixelRatio );
-    renderer.setSize( previewWindow.width, previewWindow.height);
-    // renderer.setClearAlpha( 1 );
-    // renderer.setClearColor( new THREE.Color( 0 ), 0 );
-    // renderer.setSize( previewWindow.innerWidth, previewWindow.innerHeight );
-    // These are deprecated but still work
-    // renderer.outputEncoding = THREE.sRGBEncoding;
-    // renderer.outputEncoding = THREE.LinearEncoding;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.xr.enabled = true;
-    renderer.xr.setReferenceSpaceType('local');
-
-    container.appendChild( renderer.domElement );
-
-    camera = new THREE.PerspectiveCamera( 70, previewWindow.width / previewWindow.height, 1, 2000 );
-    camera.layers.enable( 1 ); // render left view when no stereo available
-    camera.position.set(0.0, 0.0, 0.0);
-
-    window.addEventListener('resize', function () {
-
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-
-        renderer.setSize( window.innerWidth, window.innerHeight );
-
-    }, false);
-
-    player = new THREE.Group();
-
     const scene = new THREE.Scene();
     const controllerModelFactory = new XRControllerModelFactory();
     const controllers = {
         left: null,
         right: null,
     };
+
+    const previewWindow = {
+        width: window.innerWidth, // / 2, // 640,
+        height: window.innerHeight + 10, // 480,
+    };
+
+    const body = document.body,
+        container = document.createElement('div');
+    container.style = `display: block; background-color: #000; max-width: ${previewWindow.width}px; max-height: ${previewWindow.height}px; overflow: hidden;`;
+    body.appendChild(container);
+
+    console.log(container);
+
+    // Setup Stats
+    const stats = new Stats();
+    stats.showPanel(0);
+    stats.dom.style.maxWidth = "100px";
+    stats.dom.style.minWidth = "100px";
+    stats.dom.style.backgroundColor = "black";
+    document.body.appendChild(stats.dom);
+
+    const statsMesh = new HTMLMesh( stats.dom );
+    statsMesh.position.x = -2;
+    statsMesh.position.y = 2;
+    statsMesh.position.z = -2;
+    statsMesh.rotation.y = Math.PI / 4;
+    statsMesh.scale.setScalar(8);
+
+    scene.add(statsMesh);
+
+    const canvas= window.document.createElement('canvas');
+
+    const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(previewWindow.width, previewWindow.height);
+    renderer.xr.enabled = true;
+
+    console.log(renderer.domElement);
+
+    container.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(
+        50,
+        previewWindow.width / previewWindow.height,
+        0.1,
+        100,
+    );
+    camera.layers.enable( 1 ); // render left view when no stereo available
+    camera.position.set(0, 1.6, 3);
+
+    const controls = new OrbitControls(camera, container);
+    controls.target.set(0, 1.6, 0);
+    controls.update();
+
+    function onWindowResize() {
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize( window.innerWidth, window.innerHeight );
+    }
+
+    window.addEventListener('resize', onWindowResize);
+
+    const environment = new RoomEnvironment(renderer);
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(environment).texture;
+
+    const player = new THREE.Group();
+    // player.position.y = camera.position.y;
+    player.position.z = camera.position.z;
+
+    scene.add(player);
 
     for (let i = 0; i < 2; i++) {
         const raySpace = renderer.xr.getController(i);
@@ -101,18 +117,15 @@ setTimeout(function init () {
                 gamepad: new GamepadWrapper(e.data.gamepad),
                 raySpace,
                 gripSpace,
-                mesh
+                mesh,
             };
         });
 
         gripSpace.addEventListener('disconnected', (e) => {
             raySpace.visible = false;
             gripSpace.visible = false;
-            // const handedness = e.data.handedness;
-            // controllers[handedness] = null;
-            for (const h in controllers) {
-                if (controllers[h] !== null) controllers[h] = null;
-            }
+            const handedness = e.data.handedness;
+            controllers[handedness] = null;
         });
 
         player.add(raySpace, gripSpace);
@@ -120,31 +133,7 @@ setTimeout(function init () {
         // gripSpace.visible = false;
     }
 
-    // Setup Stats
-    const stats = new Stats();
-    stats.showPanel(0);
-    stats.dom.style.maxWidth = "64px";
-    stats.dom.style.minWidth = "60px";
-    stats.dom.style.backgroundColor = "black";
-    document.body.appendChild(stats.dom);
-
-    const statsMesh = new HTMLMesh( stats.dom );
-    // statsMesh.position.x = -1.5;
-    // statsMesh.position.y = 0.5;
-    // statsMesh.position.z = -2.0;
-    statsMesh.position.set(-1.5, 0.5, -2.0);
-    statsMesh.rotation.y = Math.PI / 4;
-    statsMesh.scale.setScalar(4);
-    statsMesh.material.colorWrite = true;
-    statsMesh.material.transparent = false;
-
-    // video
-
-    const videoWidth = 2064;
-    const videoHeight = 2208;
-    const videoReducer = 0.090579710;
-
-    video = document.getElementById( 'video' );
+    const video = document.getElementById( 'video' );
     // document.body.appendChild(video);
     // video.loop = true;
     // video.src = 'assets/videos/Lake_Champlain.webm';
@@ -153,100 +142,70 @@ setTimeout(function init () {
     // video.height = previewWindow.height;
     // video.play();
 
-    container.addEventListener( 'click', function () {
-        video.play();
-    });
+    const videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710, 0.0, -1.0);
 
-    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710, 0.0, 0.5);
+    videoLayerManager.initVideoLayer(false, renderer, scene, currentSession);
 
-    container.append(loadManager.div);
+    console.log("Init video layer: ", videoLayerManager.videoLayerInitialized);
 
-    const controls = new OrbitControls(camera, container);
-    controls.target.set(0, 0.0, -0.5);
-    // controls.update();
+    const updateScene = await setupScene(scene, camera, controllers, player, videoLayerManager);
 
-    async function setupEnvironment (renderer, scene, videoLayerManager) {
+    renderer.setAnimationLoop(function render (t, frame ) {
 
-        scene.add(player);
+        const data = {};
+        const delta = clock.getDelta();
+        const time = clock.getElapsedTime();
 
-        scene.add(statsMesh);
+        const xr = renderer.xr;
+        const gl = renderer.getContext();
 
-        currentSession = null;
+        waiting_for_confirmation = checkControllerAction(controllers, data, currentSession, waiting_for_confirmation);
 
-        // const sceneGroup = new THREE.Group();
-        //
-        // let sceneX = 0.0;
-        // let sceneY = -0.5;
-        // let sceneZ = -5.0;
-        //
-        // sceneGroup.translateX(sceneX);
-        // sceneGroup.translateY(sceneY);
-        // sceneGroup.translateZ(sceneZ);
-        //
-        // scene.add(sceneGroup);
+        stats.begin();
 
-        videoLayerManager.initVideoLayer(false, renderer, scene, currentSession);
+        let guiLayer,
+            equirectLayer,
+            quadLayerPlain,
+            quadLayerMips,
+            quadLayerVideo;
 
-        const updateScene = await setupScene(scene, camera, controllers, player, videoLayerManager);
+        if (
+            currentSession !== null
+            && currentSession.renderState.layers !== undefined
+            && currentSession.hasMediaLayer === undefined
+            && initXRLayers && (
+                typeof XRWebGLBinding !== 'undefined'
+                && 'createProjectionLayer' in XRWebGLBinding.prototype
+            )
+        ) {
 
-        renderer.setAnimationLoop(function render (t, frame ) {
+            console.log("Set media layer to true on currentSession:", currentSession);
 
-            const data = {};
-            const delta = clock.getDelta();
-            const time = clock.getElapsedTime();
+            currentSession.hasMediaLayer = true;
 
-            const xr = renderer.xr;
-            const gl = renderer.getContext();
+            console.log("Make gl context XR compatible: ", gl.makeXRCompatible);
 
-            waiting_for_confirmation = checkControllerAction(controllers, data, currentSession, waiting_for_confirmation);
+            gl.makeXRCompatible().then(() => {
 
-            stats.begin();
+                const glBinding = xr.getBinding(); // returns XRWebGLBinding
 
-            const clippingPlanes  = setupPortalClippingPlanes(renderer, camera);
+                currentSession.requestReferenceSpace('local-floor').then((refSpace) => {
 
-            let guiLayer,
-                equirectLayer,
-                quadLayerPlain,
-                quadLayerMips,
-                quadLayerVideo;
-
-            if (
-                currentSession !== null
-                && currentSession.renderState.layers !== undefined
-                && currentSession.hasMediaLayer === undefined
-                && initXRLayers && (
-                    typeof XRWebGLBinding !== 'undefined'
-                    && 'createProjectionLayer' in XRWebGLBinding.prototype
-                )
-            ) {
-
-                console.log("Initialize media layer on currentSession:", currentSession);
-
-                currentSession.hasMediaLayer = true;
-
-                console.log("Make gl context XR compatible: ", gl.makeXRCompatible);
-
-                gl.makeXRCompatible().then(() => {
-
-                    const glBinding = xr.getBinding(); // returns XRWebGLBinding
-
-                    currentSession.requestReferenceSpace('local-floor').then((refSpace) => {
-
-                     // Create GUI layer.
-                     guiLayer = glBinding.createQuadLayer({
+                    // Create GUI layer.
+                    guiLayer = glBinding.createQuadLayer({
                         width: statsMesh.geometry.parameters.width,
                         height: statsMesh.geometry.parameters.height,
                         viewPixelWidth: statsMesh.material.map.image.width,
                         viewPixelHeight: statsMesh.material.map.image.height,
                         space: refSpace,
                         transform: new XRRigidTransform(statsMesh.position, statsMesh.quaternion)
-                     });
-                     
-                     quadLayerVideo = videoLayerManager.initVideoLayer(true, renderer, scene, currentSession, refSpace);
+                    });
 
-                     videoLayerManager.videoLayerInitialized = true;
+                    quadLayerVideo = videoLayerManager.initVideoLayer(true, renderer, scene, currentSession, refSpace);
 
-                     currentSession.updateRenderState({
+                    console.log("Init video layer: ", videoLayerManager.videoLayerInitialized)
+
+                    currentSession.updateRenderState({
                         layers: (!!currentSession.renderState.layers.length > 0) ? [
                             quadLayerVideo,
                             // equirectLayerVideo,
@@ -257,49 +216,44 @@ setTimeout(function init () {
                             // equirectLayerVideo,
                             guiLayer
                         ]
-                     });
+                    });
 
-                  });
-               });
+                });
+            });
 
-            }
+        }
 
-            if (currentSession !== null && !!guiLayer && (guiLayer.needsRedraw || guiLayer.needsUpdate)) {
+        if (currentSession !== null && !!guiLayer && (guiLayer.needsRedraw || guiLayer.needsUpdate)) {
 
-               const glayer = xr.getBinding().getSubImage(guiLayer, frame);
-               renderer.state.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
-               gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-               const canvas = statsMesh.material.map.image;
-               gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
-               guiLayer.needsUpdate = false;
+            const glayer = xr.getBinding().getSubImage(guiLayer, frame);
+            renderer.state.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            const canvas = statsMesh.material.map.image;
+            gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+            guiLayer.needsUpdate = false;
 
-            }
+        }
+        
+        updateScene(currentSession, delta, time, (data.hasOwnProperty("action")) ? data : null);
 
-            // if (currentSession !== null) renderer.clippingPlanes =  [
-            //     ...clippingPlanes
-            // ];
+        renderer.render(scene, camera);
 
-            updateScene(
-                currentSession,
-                delta,
-                time,
-                (data.hasOwnProperty("action")) ? data : null,
-                null,
-                [
-                    ...clippingPlanes
-                ]
-            );
+        stats.end();
 
-            renderer.render(scene, camera);
+        statsMesh.material.map.update();
+    });
 
-            stats.end();
-
-            statsMesh.material.map.update();
-            // if (!!guiLayer) guiLayer.needsUpdate = true;
-        });
-
-        return renderer;
-    }
+    const sessionInit = {
+        optionalFeatures: [
+            "local-floor",
+            "bounded-floor",
+            // "hand-tracking",
+            "layers"
+        ],
+        requiredFeatures: [
+            // "webgpu"
+        ]
+    };
 
     async function getXRSession (xr) {
 
@@ -307,66 +261,11 @@ setTimeout(function init () {
 
         let session = null;
 
-        const useXRLayers =  initXRLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
         try {
-            if (!useXRLayers) {
-                session = await (xr.requestSession("immersive-vr", {
-                    optionalFeatures: [
-                        "local-floor"
-                    ]
-                }));
-            } else {
-                session = await (xr.requestSession("immersive-ar", {
-                    optionalFeatures: [
-                        // "bounded-floor",
-                        // "hand-tracking",
-                        "layers"
-                    ],
-                    requiredFeatures: [
-                        // "webgpu",
-                        "local-floor"
-                    ]
-                }));
-            }
+            session = await (xr.requestSession("immersive-ar", sessionInit));
         } catch (e) {
-            session = await (xr.requestSession("immersive-vr", {
-                optionalFeatures: [
-                    "local-floor"
-                ]
-            }));
+            session = await (xr.requestSession("immersive-vr", sessionInit));
         } finally {
-
-            previewWindow.width = window.innerWidth;
-            previewWindow.height = window.innerHeight;
-
-            renderer.setSize(previewWindow.width, previewWindow.height);
-
-            camera.aspect = previewWindow.width / previewWindow.height;
-            camera.updateProjectionMatrix();
-
-            session.requestReferenceSpace("local").then((xrReferenceSpace) => {
-                session.requestAnimationFrame((time, xrFrame) => {
-                    const viewer = xrFrame.getViewerPose(xrReferenceSpace);
-
-                    const tick = time % 3333;
-
-                    if (tick < 1) try {
-                        for (const xrView of viewer.views) {
-                            const xrViewport = XRWebGLLayer.getViewport(xrView);
-                            console.log({
-                                xrReferenceSpace,
-                                xrView,
-                                xrViewport
-                            });
-                        }
-                    } catch (e) {
-                        console.log({
-                            error: e
-                        });
-                    }
-                });
-            });
-
             return session;
         }
     }
@@ -381,16 +280,18 @@ setTimeout(function init () {
         currentSession["config"] = config;
         currentSession.addEventListener("end", onSessionEnded);
 
-        if (!!config && config.useXRLayers && !!config.videoLayerManager) { // && config.videoLayerManager.videoLayerInitialized) {
-            // Transition to WebXRLayer
-            config.videoLayerManager.clearVideoLayer(!config.useXRLayers, renderer, scene, session);
-            // config.videoLayerManager.initVideoLayer(config.useXRLayers, renderer, scene, session);
-            // config.videoLayerManager.videoLayerInitialized = true;
+        console.log(currentSession);
+
+        if (!!config && !!config.videoLayerManager && !!videoLayerManager.videoLayerInitialized) {
+            if (!!config.useXRLayers) {
+                // Transition to WebXRLayer
+                console.log("Clear video layer");
+                config.videoLayerManager.clearVideoLayer(!config.useXRLayers, renderer, scene, session);
+                // config.videoLayerManager.initVideoLayer(config.useXRLayers, renderer, scene, session);
+            }
         }
 
-        console.log("Init video layer: ", config.videoLayerManager.videoLayerInitialized)
-
-        video.play();
+        console.log("Init video layer: ", config.videoLayerManager.videoLayerInitialized);
     }
 
     function onSessionEnded (session) {
@@ -402,12 +303,14 @@ setTimeout(function init () {
         currentSession.removeEventListener("end", onSessionEnded);
         currentSession = null;
 
-        if (videoLayerManager.videoLayerInitialized && !!config.videoLayerManager) {
-            // Transition to WebGLLayer
-            console.log("Clear video layer");
-            config.videoLayerManager.clearVideoLayer(true, renderer, scene, session);
-            console.log("Init video layer");
-            config.videoLayerManager.initVideoLayer(false, renderer, scene, session);
+        if (!!config && !!config.videoLayerManager && !!videoLayerManager.videoLayerInitialized) {
+            if (!!config.useXRLayers) {
+                // Transition to WebGLLayer
+                console.log("Clear video layer");
+                config.videoLayerManager.clearVideoLayer(true, renderer, scene, session);
+                console.log("Init video layer");
+                config.videoLayerManager.initVideoLayer(false, renderer, scene, session);
+            }
         }
     }
 
@@ -469,12 +372,14 @@ setTimeout(function init () {
 
         await onSessionStarted(session, { useXRLayers, videoLayerManager });
 
+        updateScene(session, delta, time, { "action": "start_video" });
+
         // Set camera position
         // camera.position.z = 0;
         camera.position.y = 0;
 
-        player.position.z = camera.position.z;
         // player.position.y = camera.position.y;
+        player.position.z = camera.position.z;
 
         const initSceneDataIn = {
             "events": [
@@ -499,25 +404,12 @@ setTimeout(function init () {
     xr_button.disabled = false;
     delete xr_button.disabled;
 
-    canvas.addEventListener("webglcontextlost", (event) => {
-        /* The context has been lost but can be restored */
-        event.canceled = true;
+    return renderer;
 
-        console.log("webglcontextlost");
+}
+
+initRenderer(setupScene)
+    .then((renderer) => {
+        console.log("WebXR has been initialized with renderer: ", renderer);
     });
 
-    /* When the GL context is reconnected, reload the resources for the
-       current scene. */
-    canvas.addEventListener("webglcontextrestored", (event) => {
-        // ... loadSceneResources(currentScene);
-        setupEnvironment(renderer, scene, videoLayerManager);
-
-        console.log("webglcontextrestored");
-    });
-
-    setupEnvironment(renderer, scene, videoLayerManager)
-        .then((renderer) => {
-            console.log("WebXR has been initialized with renderer: ", renderer);
-        });
-
-}, 533);

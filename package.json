@@ -11,7 +11,7 @@
     "gsap": "^3.12.5",
     "iwer": "^1.0.4",
     "m3": "^0.0.0",
-    "three": "0.179.1",
+    "three": "github:Real-Currents/three.js#r178",
     "verge3d": "github:Real-Currents/verge3d#dev/add-jsm"
   },
   "devDependencies": {
@@ -21,7 +21,7 @@
     "@vitejs/plugin-basic-ssl": "~2.0.0",
     "jest": "^29.7.0",
     "rollup-plugin-shader": "^0.0.3",
-    "vite": "~6.2.3"
+    "vite": "^6.3.6"
   },
   "peerDependencies": {
     "@rollup/rollup-win32-x64-msvc": "^4.39.0"
