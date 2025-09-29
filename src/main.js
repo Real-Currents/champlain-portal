@@ -15,7 +15,7 @@ import setupVideoLayerManager from "./setup/setupVideoLayerManager";
 import { checkControllerAction } from "./controllers";
 
 let currentSession = null;
-let initXRLayers = false;
+let initXRLayers = true;
 let waiting_for_confirmation = false;
 
 async function initRenderer (setupScene = (scene, camera, controllers, player, videoManager) => {}) {
