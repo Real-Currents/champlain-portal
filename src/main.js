@@ -190,9 +190,9 @@ async function initRenderer (setupScene = (scene, camera, controllers, player, v
                 xrCamera.cameras[1].layers.mask = 5;  // 0b0101 = layers 0 and 2
             }
 
-            console.log("cameras:", [
-                ...xrCamera.cameras
-            ]);
+            // console.log("cameras:", [
+            //     ...xrCamera.cameras
+            // ]);
         }
 
         waiting_for_confirmation = checkControllerAction(controllers, data, currentSession, waiting_for_confirmation);
