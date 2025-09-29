@@ -12,7 +12,7 @@ import Stats from "three/addons/libs/stats.module";
 
 import setupScene from "./setup/setupScene";
 import setupVideoLayerManager from "./setup/setupVideoLayerManager";
-import {checkControllerAction} from "./controllers";
+import { checkControllerAction } from "./controllers";
 
 let currentSession = null;
 let initXRLayers = false;
@@ -158,6 +158,42 @@ async function initRenderer (setupScene = (scene, camera, controllers, player, v
 
         const xr = renderer.xr;
         const gl = renderer.getContext();
+
+        if (!renderer.xr.isPresenting) {
+            // Non-VR mode: enable layer 1 for 2D viewing
+            camera.layers.mask = 3; // 0b011 = layers 0 and 1
+        } else {
+            // VR mode: only enable layer 0 (default)
+            // Let WebXRManager add layer 1 and 2 automatically per eye
+            camera.layers.mask = 1; // 0b001 = layer 0 only
+        }
+
+        if (currentSession && xr.isPresenting) {
+
+            const xrCamera = xr.getCamera(camera); // gets XR camera array
+
+            if (xrCamera.cameras.length > 1) {
+
+                /*!
+                 * The mask property is a number where each bit represents whether that layer is enabled:
+                 * camera.layers.mask = 1;  // Only layer 0 enabled (binary: 0001)
+                 * camera.layers.mask = 2;  // Only layer 1 enabled (binary: 0010)
+                 * camera.layers.mask = 3;  // Layers 0 and 1 enabled (binary: 0011)
+                 * camera.layers.mask = 5;  // Layers 0 and 2 enabled (binary: 0101)
+                 * camera.layers.mask = 7;  // Layers 0, 1, and 2 enabled (binary: 0111)
+                 */
+
+                // Left eye: only layer 1
+                xrCamera.cameras[0].layers.mask = 3;  // 0b0011 = layers 0 and 1
+
+                // Right eye: only layer 2
+                xrCamera.cameras[1].layers.mask = 5;  // 0b0101 = layers 0 and 2
+            }
+
+            console.log("cameras:", [
+                ...xrCamera.cameras
+            ]);
+        }
 
         waiting_for_confirmation = checkControllerAction(controllers, data, currentSession, waiting_for_confirmation);
 

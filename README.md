@@ -1,12 +1,32 @@
-# WebXR Layers Start!
+# Lake Champlain WebXR Portal!
 John Hall
 
-This is a simple starter app for a WebXR Layers project. I’ve seen some
-examples where developers in-the-know effortlessly incorporate WebXR
-Layers into their app, some of which are sampled here, but I haven’t
-come across any demonstrating a practical boiler plate and usage of
-WebXR Layers with [three.js](https://github.com/mrdoob/three.js). This
-is my attempt…
+This is an attempt to create a grounded immersive experience; an
+immersive experience explicitly tied to a real, specific place that
+people can visit and verify.
+
+The portal is designed to test whether immersive technology can create
+genuine understanding when it connects to a real experience, provides an
+embodied understanding and most importantly, remains transparent in its
+construction and derivation. Rather than abstract data points, users
+experience an actual place - Lake Champlain - through high-quality
+stereo video and elevation data. Users can potentially visit this real
+location and compare their virtual experience with reality. The
+projected wireframe uses real topographic data
+(<a href="https://dwtkns.com/srtm30m/" class="external"
+target="_blank">SRTM elevation data</a>), allowing users to develop
+spatial understanding of an actual geographic area rather than arbitrary
+geometric relationships. The stereo video footage that is project onto a
+<a href="https://github.com/Real-Currents/webxr-layers-start/"
+class="external" target="_blank">WebXR Layer</a> was produced on site,
+facilitating a visceral observation of Lake Champlain rather than hiding
+the mediation behind seamless interfaces.
+
+The portal serves as an experiment in whether immersive technology can
+create shared experiential baselines when grounded in verifiable reality
+rather than abstract data. It plays on the question of whether people
+experiencing the same real place virtually might develop genuine shared
+reference points.
 
 ## Configuration
 
@@ -28,35 +48,3 @@ Run `npm run dev` to run the WebXR dev server.
       ➜  press h + enter to show help
 
 <hr />
-
-## Original changes to [WebXR Live Coding](https://mrdoob.github.io/xrcode/)
-
-> I’ve seen many people trying to do this on the Quest but always
-> getting blocked for one reason or another. I had to give it a go
-> myself.
->
-> Kudos to the one that started it all:
-> [RiftSketch](https://www.youtube.com/watch?v=db-7J5OaSag) 🙏
->
-> ------------------------------------------------------------------------
->
-> #### Updates
->
-> July 6, 2021
->
-> - Switch to [WebXR Layers](https://www.w3.org/TR/webxrlayers-1/) for
->   improved text quality.
->
-> September 11, 2020
->
-> - Added apartment scene
->
-> May 22, 2020
->
-> - Added error console
->
-> May 21, 2020
->
-> - Made sketches clonable (squeeze button)
-> - Made sketches draggable
-> - First release
