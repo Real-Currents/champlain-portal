@@ -28,10 +28,19 @@ export default function setupVideoLayerManager (
 
     const texture = new THREE.Texture(video);
 
+    // Starting with Three.js r152, a "linear workflow" was enabled by default,
+    // where sRGB input colors are converted to linear color space for rendering,
+    // then converted back to sRGB for display. Updates to Color Management in
+    // three.js r152 - [Discussion - three.js forum](https://discourse.threejs.org/t/updates-to-color-management-in-three-js-r152/50791)
+
+    // Wolvic (based on Chromium/Firefox Reality) may handle WebGL color spaces
+    // differently than Meta's Quest browser, leading to this double-conversion
+    // issue where the video gets gamma-corrected twice.
     if (isWolvic) {
         // Wolvic applies extra gamma, so we need to pre-compensate
         // by providing "under-corrected" input
         texture.colorSpace = THREE.LinearSRGBColorSpace;
+        // ... sort of works, but color space is still visibly "washed out".
     } else {
         // Quest browser and others handle sRGB correctly
         texture.colorSpace = THREE.SRGBColorSpace;
