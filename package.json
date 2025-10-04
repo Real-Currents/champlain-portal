@@ -39,6 +39,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "render:readme": "quarto render README.qmd --to gfm --output README.md",
     "start": "vite --host 0.0.0.0 --open",
+    "start:adb-port-forwarding": "adb reverse tcp:5173 tcp:5173",
     "test": "jest --no-cache --passWithNoTests",
     "test:clean": "jest --clearCache"
   }
