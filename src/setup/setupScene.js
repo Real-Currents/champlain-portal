@@ -1,27 +1,26 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
-import loadManager from "../loadManager";
-import plane from "../objects/plane";
-import rotatingCube from "../objects/rotatingCube";
-import setupThreejsTutorial3dSound from "../threejs-tutorial-3d-sound";
+import loadManager from "../setup/setupLoadManager";
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = new GLTFLoader(loadManager);
 
 const gloveGroup_01 = new THREE.Group();
 const gloveGroup_02 = new THREE.Group();
 
-const sound_data = [];
-let sound_data_loaded = false;
+export default async function setupScene (
+    scene,
+    camera,
+    controllers,
+    player,
+    videoLayerManager
+) {
 
-export default async function setupScene (renderer, scene, camera, controllers, player) {
+    // Stationary (orientation-only) content lives under stationaryContent in main.js; this subtree stays full 6DoF.
+    // Future: reparent chosen nodes under the same group or duplicate the V-offset pattern for those objects.
 
     // Set player view
     player.add(camera);
-
-    // Place objects
-    // scene.add(plane);
-    // scene.add(rotatingCube);
 
     // Get rayspace from controller object and update position relative to plane (floor)
     if (controllers.hasOwnProperty("right") && controllers.right !== null) {
@@ -39,95 +38,58 @@ export default async function setupScene (renderer, scene, camera, controllers, 
         gloveGroup_02.add(gltf.scene);
     });
 
-    const wait_for_sounds_to_load = setupThreejsTutorial3dSound(renderer, scene, camera);
+    const sceneGroup = new THREE.Group();
 
-    wait_for_sounds_to_load
-        .then((sounds) => {
-            for (const sp of sounds) {
-                sp
-                    .then(async (sound) => {
-                        console.log("sound:", (await sound));
+    let sceneX = 0.0;
+    let sceneY = 0.0;
+    let sceneZ = -5.0;
 
-                        sound_data.push(sound);
-                    })
-            }
-        });
+    scene.add(sceneGroup);
+
+    sceneGroup.translateX(sceneX);
+    sceneGroup.translateY(sceneY);
+    sceneGroup.translateZ(sceneZ);
 
     return function updateScene (currentSession, delta, time, sceneDataIn, sceneDataOut) {
 
         const data_out = {
-            events: [],
-            sound_data: [
-                ...sound_data
-            ]
+            events: []
         };
 
         if (controllers.hasOwnProperty("left") && controllers.left !== null) {
 
             const gamepad_01 = controllers.left.gamepad,
-                raySpace_01 = controllers.left.raySpace,
-                mesh_01 = controllers.left.mesh;
+                raySpace_01 = controllers.left.raySpace;
 
-            // Attach the glove to the right controller
+            // Attach the glove to the left controller
             if (!raySpace_01.children.includes(gloveGroup_01)) {
+                // Hide the default controller model
+                controllers.left.mesh.visible = false;
                 raySpace_01.add(gloveGroup_01);
-                mesh_01.visible = false; // Hide the default controller model
             }
         }
 
         if (controllers.hasOwnProperty("right") && controllers.right !== null) {
 
             const gamepad_02 = controllers.right.gamepad,
-                raySpace_02 = controllers.right.raySpace,
-                mesh_02 = controllers.right.mesh;
-
-            raySpace_02.getWorldPosition(plane.position);
-            raySpace_02.getWorldQuaternion(plane.quaternion);
+                raySpace_02 = controllers.right.raySpace;
 
             // Attach the glove to the right controller
             if (!raySpace_02.children.includes(gloveGroup_02)) {
+                // Hide the default controller model
+                controllers.right.mesh.visible = false;
                 raySpace_02.add(gloveGroup_02);
-                mesh_02.visible = false; // Hide the default controller model
-            }
-        }
-
-        rotatingCube.rotX(0.01);
-        rotatingCube.rotY(0.01);
-
-        if (data_out.sound_data.length > 0) {
-            for (const sound of data_out["sound_data"]) {
-                sound.raf_(delta); // request animation frame for sound
-            }
-
-            if (!sound_data_loaded) {
-
-                console.log(data_out);
-
-                data_out.events.push({
-                    "action": "sounds_ready"
-                });
-
-                sound_data_loaded = true;
             }
         }
 
         if (typeof sceneDataIn === "object" && sceneDataIn != null) {
             console.log("sceneDataIn:", sceneDataIn);
-            // loadManager.addLoadHandler(async () => {
 
-                if ("events" in sceneDataIn) {
-                    for (const event of sceneDataIn["events"]) {
-                        if ("action" in event) {
-                            if (event["action"] == "play_sounds") {
-                                for (const sound of data_out["sound_data"]) {
-                                    sound.play(); // play sound
-                                }
-                            }
-                        }
-                    }
+            if (sceneDataIn.hasOwnProperty("action")) {
+                if (sceneDataIn["action"] === "start_video") {
+                    videoLayerManager.video.play();
                 }
-
-            // });
+            }
         }
 
         if (typeof sceneDataOut === "function") {

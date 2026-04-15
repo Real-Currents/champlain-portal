@@ -1,10 +1,11 @@
 # WebXR Layers Start!
 John Hall
 
-This is a simple boostrap repo for a WebXR Layers project. I’ve seen some examples where
-developers in-the-know effortlessly incorporate WebXR Layers into their
-app, some of which are sampled here, but I haven’t come across any
-demonstrating a practical boiler plate and usage of WebXR Layers. This
+This is a simple starter app for a WebXR Layers project. I’ve seen some
+examples where developers in-the-know effortlessly incorporate WebXR
+Layers into their app, some of which are sampled here, but I haven’t
+come across any demonstrating a practical boiler plate and usage of
+WebXR Layers with [three.js](https://github.com/mrdoob/three.js). This
 is my attempt…
 
 ## Configuration
@@ -28,7 +29,7 @@ Run `npm run dev` to run the WebXR dev server.
 
 <hr />
 
-## Original changes to [WebXR&nbsp:Live&nbsp:Coding](https://mrdoob.github.io/xrcode/)
+## Original changes to [WebXR Live Coding](https://mrdoob.github.io/xrcode/)
 
 > I’ve seen many people trying to do this on the Quest but always
 > getting blocked for one reason or another. I had to give it a go
