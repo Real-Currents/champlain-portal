@@ -1,24 +1,23 @@
-# WebXR Layers Start!
-John Hall
+# Lake Champlain WebXR Portal
 
-This is a simple boostrap repo for a WebXR Layers project. I’ve seen some examples where
-developers in-the-know effortlessly incorporate WebXR Layers into their
-app, some of which are sampled here, but I haven’t come across any
-demonstrating a practical boiler plate and usage of WebXR Layers. This
-is my attempt…
+dancingfrog
+
+Immersive WebXR experience for the Lake Champlain region, built with Vite
+and Three.js. The app layers terrain, media, and interaction patterns
+adapted from WebXR Layers examples and starter work from the broader WebXR
+community.
 
 ## Configuration
 
 This project uses vite to build/bundle/package/etc. the WebXR app. The
 `vite.config.js` configuration also depends on the
-`@vitejs/plugin-basic-ssl` plugin so that the dev server will use the
-HTTPS protocol which is required for entering immersive mode on most web
+`@vitejs/plugin-basic-ssl` plugin so that the dev server will use the HTTPS
+protocol which is required for entering immersive mode on most web
 browsers. Install all required dependencies with `npm install`
 
 ## Running Code
 
 Run `npm run dev` to run the WebXR dev server.
-
 
       VITE v5.4.11  ready in 293 ms
 
