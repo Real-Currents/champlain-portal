@@ -1,12 +1,14 @@
-# WebXR Layers Start!
-John Hall
+# Lake Champlain WebXR Portal
 
-This is a simple starter app for a WebXR Layers project. I’ve seen some
-examples where developers in-the-know effortlessly incorporate WebXR
-Layers into their app, some of which are sampled here, but I haven’t
-come across any demonstrating a practical boiler plate and usage of
-WebXR Layers with [three.js](https://github.com/mrdoob/three.js). This
-is my attempt…
+dancingfrog
+
+Immersive WebXR experience for the Lake Champlain region. This is a
+simple starter app for a WebXR Layers project. I’ve seen some examples
+where developers in-the-know effortlessly incorporate WebXR Layers into
+their app, some of which are sampled here, but I haven’t come across
+any demonstrating a practical boiler plate and usage of WebXR Layers
+with [three.js](https://github.com/mrdoob/three.js). This is my
+attempt…
 
 ## Configuration
 

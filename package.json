@@ -1,8 +1,8 @@
 {
-  "name": "baselines",
+  "name": "champlain-portal",
   "version": "0.0.1",
   "author": "dancingfrog",
-  "description": "WebXR Start!",
+  "description": "Lake Champlain WebXR Portal",
   "license": "CC0-1.0",
   "main": "src/main.js",
   "dependencies": {
