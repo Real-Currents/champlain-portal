@@ -4,6 +4,8 @@ import basicSsl from "@vitejs/plugin-basic-ssl";
 import shader from 'rollup-plugin-shader';
 import * as path from 'path';
 
+const threeAddons = path.resolve(__dirname, 'node_modules/three/examples/jsm');
+
 export default {
     base: "",
     build: {
@@ -29,6 +31,11 @@ export default {
     },
     resolve: {
         alias: [
+            // Official npm `three` exposes `three/addons/*`; GitHub forks often only ship `examples/jsm`.
+            {
+                find: /^three\/addons\/(.+)$/,
+                replacement: `${threeAddons}/$1`
+            },
             // {
             //     find: "@", replacement: resolve(__dirname, "./src"),
             // },
