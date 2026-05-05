@@ -16,6 +16,9 @@ export default async function setupScene (
     videoLayerManager
 ) {
 
+    // Stationary (orientation-only) content lives under stationaryContent in main.js; this subtree stays full 6DoF.
+    // Future: reparent chosen nodes under the same group or duplicate the V-offset pattern for those objects.
+
     // Set player view
     player.add(camera);
 
@@ -26,12 +29,12 @@ export default async function setupScene (
     }
 
     // Load the glove model
-    gltfLoader.load('assets/glove_01_dark.glb', (gltf) => {
+    gltfLoader.load('assets/glove_01.glb', (gltf) => {
         gloveGroup_01.add(gltf.scene);
     });
 
     // Load the glove model
-    gltfLoader.load('assets/glove_02_dark.glb', (gltf) => {
+    gltfLoader.load('assets/glove_02.glb', (gltf) => {
         gloveGroup_02.add(gltf.scene);
     });
 

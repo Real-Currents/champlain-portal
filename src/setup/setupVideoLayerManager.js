@@ -1,5 +1,22 @@
 import * as THREE from "three";
 
+/**
+ * XRQuadLayer center Y in `local-floor` (meters above physical floor), before stationary W+V.
+ * With `updateVideoQuadLayerPosition` (stationaryView.js), final Y ≈ this + viewerMid.y;
+ * use ~0 so the quad midpoint sits near eye height when V tracks the headset.
+ * WebGL stereo mesh vertical placement uses `videoCenterY` from main (see git 4efab14); this path is separate.
+ */
+const VIDEO_QUAD_LAYER_Y_OFFSET_METERS = 0;
+
+const XR_QUAD_VIDEO_HEIGHT = 2208;
+const XR_QUAD_VIDEO_REDUCER = 0.00090579710;
+
+/**
+ * Meters: former XRQuadLayer base Y before recentering (`(height * reducer) / 2`, half quad height).
+ * Subtitle panel is lowered by this same amount to match the video shift.
+ */
+export const VIDEO_QUAD_Y_RECENTER_DELTA_METERS = (XR_QUAD_VIDEO_HEIGHT * XR_QUAD_VIDEO_REDUCER) / 2;
+
 // These definition make it possible to try different versions THREE in the package deps
 const PlaneGeometry = ("PlaneBufferGeometry" in THREE) ?
     THREE.PlaneBufferGeometry : THREE.PlaneGeometry;
@@ -50,7 +67,12 @@ export default function setupVideoLayerManager (
 
     let initialized = false;
 
-    function initVideoLayer (withWebXRLayer = false, renderer = null, scene = null, session = null, refSpace = null) {
+    /** World-space offset W for the video XRQuadLayer (same values as initial XRRigidTransform position). */
+    let videoQuadLayerBasePosition = { x: 0, y: 0, z: videoDepthZ };
+
+    function initVideoLayer (withWebXRLayer = false, renderer = null, scene = null, session = null, refSpace = null, webGLParent = null) {
+
+        const parentForWebGL = webGLParent || scene;
 
         if (!withWebXRLayer || session === null) {
 
@@ -112,7 +134,7 @@ export default function setupVideoLayerManager (
 
             console.log("Add video layer using WebGL plane geometry");
 
-            scene.add(webGLVideo);
+            parentForWebGL.add(webGLVideo);
 
             initialized = true;
 
@@ -120,15 +142,15 @@ export default function setupVideoLayerManager (
 
         } else if (refSpace !== null) {
 
-            const xr = renderer.xr;
-            const gl = renderer.getContext();
-
             let videoAngle = 96; // 110;
             let videoLayout = "stereo-left-right";
             let eqrtRadius = 10;
             const videoWidth = 2064;
-            const videoHeight = 2208;
-            const videoReducer = 0.00090579710;
+            const videoHeight = XR_QUAD_VIDEO_HEIGHT;
+            const videoReducer = XR_QUAD_VIDEO_REDUCER;
+
+            const quadY = VIDEO_QUAD_LAYER_Y_OFFSET_METERS;
+            videoQuadLayerBasePosition = { x: 0, y: quadY, z: videoDepthZ };
 
             // Create background EQR video layer.
             const mediaBinding = new XRMediaBinding(session);
@@ -143,9 +165,8 @@ export default function setupVideoLayerManager (
                     height: videoHeight * videoReducer,
                     space: refSpace,
                     transform: new XRRigidTransform(
-                        {x: 0, y: (videoHeight * videoReducer) / 2, z: videoDepthZ},
-                        {},
-                        {}
+                        { x: 0, y: quadY, z: videoDepthZ },
+                        { x: 0, y: 0, z: 0, w: 1 }
                     )
                 }
             );
@@ -190,7 +211,16 @@ export default function setupVideoLayerManager (
         if (!withWebXRLayer) {
 
             console.log("Remove video layer from WebGL plane geometry");
-            scene.remove(webGLVideo);
+            if (webGLVideo.parent) {
+
+                webGLVideo.parent.remove(webGLVideo);
+
+            } else if (scene) {
+
+                scene.remove(webGLVideo);
+
+            }
+
         }
 
         if (textureUpdateInterval > 0) {
@@ -207,7 +237,12 @@ export default function setupVideoLayerManager (
                     initVideoLayer,
                     clearVideoLayer,
                     webGLVideo,
-                    webXRLayerVideo
+                    webXRLayerVideo,
+                    get videoQuadLayerBasePosition () {
+
+                        return videoQuadLayerBasePosition;
+
+                    }
                 },
                 'videoLayerInitialized',
                 {
