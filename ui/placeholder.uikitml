@@ -1,0 +1,7 @@
+<ui>
+  <panel id="iwsdk-panel" position="0 2 -3" size="2 1">
+    <background color="#1a1a1a" opacity="0.8" />
+    <text position="0 0 0" size="0.15" 
+          text="IWSDK Integration Ready" color="#00ff00" />
+  </panel>
+</ui>

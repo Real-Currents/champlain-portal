@@ -13,28 +13,17 @@ import loadManager from "./setup/setupLoadManager";
 import setupScene from "./setup/setupScene";
 import setupPortalClippingPlanes from "./setup/setupPortalClippingPlanes";
 import setupVideoLayerManager from "./setup/setupVideoLayerManager";
-import setupGridEnvironment from "./setup/setupGridEnvironment";
-import createSubtitlePanel from "./ui/SubtitlePanel";
 import { checkControllerAction } from "./controllers";
-import {
-    getViewerMidpoint,
-    updateStationaryGroup,
-    updateVideoQuadLayerPosition,
-    isStationaryGridEnabled
-} from "./xr/stationaryView";
 
 let currentSession = null;
 let initXRLayers = true;
 let waiting_for_confirmation = false;
 
-/** Persisted across animation frames (must not be redeclared inside render). */
-let xrLayerQuadVideo = null;
-
 setTimeout(function init () {
 
-    console.log("Initiate WebXR Layers scene (passthrough-first: immersive-ar + optional layers).");
+    console.log("Initiate WebXR Layers scene!");
 
-    let camera, controls, renderer, player, video, videoLayerManager, subtitlePanel;
+    let camera, controls, renderer, player, video, videoLayerManager;
 
     const body = document.body;
 
@@ -52,19 +41,18 @@ setTimeout(function init () {
     };
     container.style = `display: block; background-color: #000; max-width: ${previewWindow.width}px; max-height: ${previewWindow.height}px; overflow: hidden;`;
 
-    // alpha: true + transparent clear so immersive-ar passthrough shows behind the scene
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
     renderer.setPixelRatio( window.devicePixelRatio );
     renderer.setSize( previewWindow.width, previewWindow.height);
-    renderer.setClearColor( 0x000000, 0 );
+    // renderer.setClearAlpha( 1 );
+    // renderer.setClearColor( new THREE.Color( 0 ), 0 );
     // renderer.setSize( previewWindow.innerWidth, previewWindow.innerHeight );
     // These are deprecated but still work
     // renderer.outputEncoding = THREE.sRGBEncoding;
     // renderer.outputEncoding = THREE.LinearEncoding;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.xr.enabled = true;
-    // Align with XRQuadLayer space (local-floor) for consistent viewer midpoint V
-    renderer.xr.setReferenceSpaceType('local-floor');
+    renderer.xr.setReferenceSpaceType('local');
 
     container.appendChild( renderer.domElement );
 
@@ -88,12 +76,6 @@ setTimeout(function init () {
     player = new THREE.Group();
 
     const scene = new THREE.Scene();
-    /** Grid + WebGL stereo video only; position = viewer translation V each frame when stationary mode is on. */
-    const stationaryContent = new THREE.Group();
-    scene.add(stationaryContent);
-
-    const stationaryGridEnabled = isStationaryGridEnabled();
-
     const controllerModelFactory = new XRControllerModelFactory();
     const controllers = {
         left: null,
@@ -148,11 +130,6 @@ setTimeout(function init () {
     // statsMesh.position.y = 0.5;
     // statsMesh.position.z = -2.0;
     statsMesh.position.set(-1.5, 0.5, -2.0);
-    /** Restored on XR session end; 2D / first paint keeps the authored position above. */
-    const statsMeshPosition2D = statsMesh.position.clone();
-    /** Added to `statsMesh.position.y` only while immersive (Enter XR). Tune on headset. */
-    const STATS_MESH_Y_OFFSET_IMMERSIVE = 1.5;
-
     statsMesh.rotation.y = Math.PI / 4;
     statsMesh.scale.setScalar(4);
     statsMesh.material.colorWrite = true;
@@ -177,9 +154,7 @@ setTimeout(function init () {
         video.play();
     });
 
-    // 6th arg `videoCenterY`: WebGL stereo mesh vertical offset (see 4efab14 "Vertically recenter video mesh layer").
-    // XRQuadLayer Y uses VIDEO_QUAD_LAYER_Y_OFFSET_METERS in setupVideoLayerManager (separate from mesh).
-    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710, 0.0, -2.0);
+    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710, 0.0, -2.5);
 
     container.append(loadManager.div);
 
@@ -191,16 +166,9 @@ setTimeout(function init () {
 
         currentSession = null;
 
-        videoLayerManager.initVideoLayer(false, renderer, scene, currentSession, null, stationaryContent);
-
-        // Grid environment: dark void with cyan Euclidean grid (under stationaryContent with video mesh)
-        setupGridEnvironment(scene, stationaryContent);
+        videoLayerManager.initVideoLayer(false, renderer, scene, currentSession);
 
         const updateScene = await setupScene(scene, camera, controllers, player, videoLayerManager);
-
-        // Subtitle panel: head-locked with smooth-follow physics
-        subtitlePanel = createSubtitlePanel("Welcome...");
-        subtitlePanel.initSubtitleLayer(scene);
 
         renderer.setAnimationLoop(function render (t, frame ) {
 
@@ -214,12 +182,13 @@ setTimeout(function init () {
             // Three.js r170+ automatically inherits and enforces layer masks from the 
             // main camera to the XR cameras, and there's no way to override it after the 
             // fact because it happens in the WebXRManager's internal update cycle.
-            // Change the main camera's layers based on whether an immersive session is active
+            // Change the main camera's layers based on whether you're in VR mode or not... 
             if (!xr.isPresenting) {
-                // Desktop / pre-XR: enable layer 1 for 2D stereo video preview
+                // Non-VR mode: enable layer 1 for 2D viewing
                 camera.layers.mask = 3; // 0b011 = layers 0 and 1
             } else {
-                // immersive-ar / immersive-vr: layer 0 only on main camera; per-eye layers handled by WebXRManager
+                // VR mode: only enable layer 0 (default)
+                // Let WebXRManager add layer 1 and 2 automatically per eye
                 camera.layers.mask = 1; // 0b001 = layer 0 only
             }
 
@@ -256,23 +225,15 @@ setTimeout(function init () {
 
             waiting_for_confirmation = checkControllerAction(controllers, data, currentSession, waiting_for_confirmation);
 
-            const stationaryActive = stationaryGridEnabled && xr.isPresenting && currentSession !== null;
-            const viewerMid = getViewerMidpoint(renderer, frame);
-            updateStationaryGroup(stationaryContent, viewerMid, stationaryActive);
-
-            if (stationaryActive && xrLayerQuadVideo !== null && viewerMid) {
-
-                updateVideoQuadLayerPosition(
-                    xrLayerQuadVideo,
-                    videoLayerManager.videoQuadLayerBasePosition,
-                    viewerMid
-                );
-
-            }
-
             stats.begin();
 
             // const clippingPlanes  = setupPortalClippingPlanes(renderer, camera);
+
+            let guiLayer,
+                equirectLayer,
+                quadLayerPlain,
+                quadLayerMips,
+                quadLayerVideo;
 
             if (
                 currentSession !== null
@@ -292,30 +253,50 @@ setTimeout(function init () {
 
                 gl.makeXRCompatible().then(() => {
 
-                    return currentSession.requestReferenceSpace('local-floor').then((refSpace) => {
+                    const glBinding = xr.getBinding(); // returns XRWebGLBinding
 
-                     xrLayerQuadVideo = videoLayerManager.initVideoLayer(true, renderer, scene, currentSession, refSpace);
+                    currentSession.requestReferenceSpace('local-floor').then((refSpace) => {
+
+                     // Create GUI layer.
+                     guiLayer = glBinding.createQuadLayer({
+                        width: statsMesh.geometry.parameters.width,
+                        height: statsMesh.geometry.parameters.height,
+                        viewPixelWidth: statsMesh.material.map.image.width,
+                        viewPixelHeight: statsMesh.material.map.image.height,
+                        space: refSpace,
+                        transform: new XRRigidTransform(statsMesh.position, statsMesh.quaternion)
+                     });
+                     
+                     quadLayerVideo = videoLayerManager.initVideoLayer(true, renderer, scene, currentSession, refSpace);
 
                      videoLayerManager.videoLayerInitialized = true;
 
-                     const existing = currentSession.renderState.layers;
-                     const baseProjection = existing && existing.length > 0 ? existing[0] : null;
-
                      currentSession.updateRenderState({
-                        layers: baseProjection ? [
-                            xrLayerQuadVideo,
-                            baseProjection
+                        layers: (!!currentSession.renderState.layers.length > 0) ? [
+                            quadLayerVideo,
+                            // equirectLayerVideo,
+                            guiLayer,
+                            currentSession.renderState.layers[0]
                         ] : [
-                            xrLayerQuadVideo
+                            quadLayerVideo,
+                            // equirectLayerVideo,
+                            guiLayer
                         ]
                      });
 
                   });
-               }).catch((err) => {
-                    console.error("WebXR layer stack setup failed:", err);
-                    if (currentSession) delete currentSession.hasMediaLayer;
-                    xrLayerQuadVideo = null;
                });
+
+            }
+
+            if (currentSession !== null && !!guiLayer && (guiLayer.needsRedraw || guiLayer.needsUpdate)) {
+
+               const glayer = xr.getBinding().getSubImage(guiLayer, frame);
+               renderer.state.bindTexture(gl.TEXTURE_2D, glayer.colorTexture);
+               gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+               const canvas = statsMesh.material.map.image;
+               gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+               guiLayer.needsUpdate = false;
 
             }
 
@@ -334,13 +315,6 @@ setTimeout(function init () {
                 // ]
             );
 
-            // Update subtitle panel smooth-follow position
-            // In XR mode, use the XR camera for accurate head tracking
-            const activeCamera = (currentSession && xr.isPresenting)
-                ? xr.getCamera(camera)
-                : camera;
-            subtitlePanel.update(activeCamera);
-
             renderer.render(scene, camera);
 
             stats.end();
@@ -352,82 +326,74 @@ setTimeout(function init () {
         return renderer;
     }
 
-    /**
-     * Passthrough-first: only immersive-ar (no silent fallback to immersive-vr).
-     * 1) immersive-ar + layers + local-floor
-     * 2) immersive-ar + local-floor (layers not granted by UA)
-     * Throws if immersive-ar cannot be created.
-     */
     async function getXRSession (xr) {
 
         console.log("xr", `${JSON.stringify(xr)}`);
 
         let session = null;
 
-        const wantLayers = initXRLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
+        const useXRLayers =  initXRLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
         try {
-            if (wantLayers) {
-                try {
-                    session = await xr.requestSession("immersive-ar", {
-                        optionalFeatures: [
-                            "layers",
-                            "local-floor"
-                        ]
-                    });
-                } catch (e1) {
-                    console.warn("[WebXR] immersive-ar + layers not available; trying AR without layers:", e1);
-                    session = await xr.requestSession("immersive-ar", {
-                        optionalFeatures: [
-                            "local-floor"
-                        ]
-                    });
-                }
-            } else {
-                session = await xr.requestSession("immersive-ar", {
+            if (!useXRLayers) {
+                session = await (xr.requestSession("immersive-vr", {
                     optionalFeatures: [
                         "local-floor"
                     ]
-                });
+                }));
+            } else {
+                session = await (xr.requestSession("immersive-ar", {
+                    optionalFeatures: [
+                        // "bounded-floor",
+                        // "hand-tracking",
+                        "layers"
+                    ],
+                    requiredFeatures: [
+                        // "webgpu",
+                        "local-floor"
+                    ]
+                }));
             }
         } catch (e) {
-            console.error("[WebXR] immersive-ar is not available:", e);
-            throw new Error(
-                "immersive-ar (passthrough) is not available. Use a WebXR AR-capable headset and browser (e.g. Meta Quest Browser)."
-            );
-        }
+            session = await (xr.requestSession("immersive-vr", {
+                optionalFeatures: [
+                    "local-floor"
+                ]
+            }));
+        } finally {
 
-        previewWindow.width = window.innerWidth;
-        previewWindow.height = window.innerHeight;
+            previewWindow.width = window.innerWidth;
+            previewWindow.height = window.innerHeight;
 
-        renderer.setSize(previewWindow.width, previewWindow.height);
+            renderer.setSize(previewWindow.width, previewWindow.height);
 
-        camera.aspect = previewWindow.width / previewWindow.height;
-        camera.updateProjectionMatrix();
+            camera.aspect = previewWindow.width / previewWindow.height;
+            camera.updateProjectionMatrix();
 
-        session.requestReferenceSpace("local").then((xrReferenceSpace) => {
-            session.requestAnimationFrame((time, xrFrame) => {
-                const viewer = xrFrame.getViewerPose(xrReferenceSpace);
+            session.requestReferenceSpace("local").then((xrReferenceSpace) => {
+                session.requestAnimationFrame((time, xrFrame) => {
+                    const viewer = xrFrame.getViewerPose(xrReferenceSpace);
 
-                const tick = time % 3333;
+                    const tick = time % 3333;
 
-                if (tick < 1) try {
-                    for (const xrView of viewer.views) {
-                        const xrViewport = XRWebGLLayer.getViewport(xrView);
+                    if (tick < 1) try {
+                        for (const xrView of viewer.views) {
+                            const xrViewport = XRWebGLLayer.getViewport(xrView);
+                            console.log({
+                                xrReferenceSpace,
+                                xrView,
+                                xrViewport
+                            });
+                        }
+                    } catch (e) {
                         console.log({
-                            xrReferenceSpace,
-                            xrView,
-                            xrViewport
+                            error: e
                         });
                     }
-                } catch (e) {
-                    console.log({
-                        error: e
-                    });
-                }
+                });
             });
-        });
 
-        return session;
+            return session;
+        }
     }
 
     async function onSessionStarted (session, config) {
@@ -447,14 +413,7 @@ setTimeout(function init () {
             // config.videoLayerManager.videoLayerInitialized = true;
         }
 
-        console.log("Init video layer:", config.videoLayerManager.videoLayerInitialized, "useXRLayers:", config.useXRLayers);
-
-        if (renderer.xr.isPresenting) {
-
-            statsMesh.position.copy(statsMeshPosition2D);
-            statsMesh.position.y += STATS_MESH_Y_OFFSET_IMMERSIVE;
-
-        }
+        console.log("Init video layer: ", config.videoLayerManager.videoLayerInitialized)
 
         video.play();
     }
@@ -465,19 +424,15 @@ setTimeout(function init () {
 
         console.log("Ended WebXR session!", session, config);
 
-        xrLayerQuadVideo = null;
-
         currentSession.removeEventListener("end", onSessionEnded);
         currentSession = null;
-
-        statsMesh.position.copy(statsMeshPosition2D);
 
         if (videoLayerManager.videoLayerInitialized && !!config.videoLayerManager) {
             // Transition to WebGLLayer
             console.log("Clear video layer");
             config.videoLayerManager.clearVideoLayer(true, renderer, scene, session);
             console.log("Init video layer");
-            config.videoLayerManager.initVideoLayer(false, renderer, scene, session, null, stationaryContent);
+            config.videoLayerManager.initVideoLayer(false, renderer, scene, session);
         }
     }
 
@@ -533,21 +488,9 @@ setTimeout(function init () {
 
         }
 
-        let session;
-        try {
-            session = await getXRSession(navigator.xr);
-        } catch (err) {
-            console.error(err);
-            alert(err.message || String(err));
-            return;
-        }
+        const useXRLayers =  initXRLayers && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
 
-        console.log("[WebXR] session.mode:", session.mode, "enabledFeatures:", session.enabledFeatures);
-
-        const layersFeatureGranted = session.enabledFeatures?.includes("layers") ?? false;
-        const useXRLayers = initXRLayers
-            && layersFeatureGranted
-            && (typeof XRWebGLBinding !== 'undefined' && 'createProjectionLayer' in XRWebGLBinding.prototype);
+        const session = await getXRSession(navigator.xr);
 
         await onSessionStarted(session, { useXRLayers, videoLayerManager });
 
