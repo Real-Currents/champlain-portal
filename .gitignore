@@ -29,11 +29,18 @@ dist-ssr
 .Rproj.user
 .Rhistory
 
-data/
-_targets/
+certs
+data
+_targets
+
+# Audacity sidecar files (do not commit)
+*.aup3-shm
+*.aup3-wal
 *.bak
 *.csv
 *.xlsx
 
 public/assets/videos
 public/verge3d-code-examples
+
+CLAUDE*

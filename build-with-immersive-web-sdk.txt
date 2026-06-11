@@ -1,0 +1,16 @@
+# install https://github.com/dancingfrog/immersive-web-sdk.git at ../immersive-web-sdk
+cd .. && git clone https://github.com/dancingfrog/immersive-web-sdk.git
+
+# build immersive-web-sdk
+cd ../immersive-web-sdk
+npm install
+npm install -g pnpm
+pnpm install
+npm run build:all
+
+# command to install immersive-web-sdk modules (packages)
+npm install file:../immersive-web-sdk/packages/core file:../immersive-web-sdk/packages/xr-input file:../immersive-web-sdk/packages/locomotor file:../immersive-web-sdk/packages/glxf
+npm install --save-dev file:../immersive-web-sdk/packages/vite-plugin-iwer file:../immersive-web-sdk/packages/vite-plugin-uikitml
+
+# build
+npm run build

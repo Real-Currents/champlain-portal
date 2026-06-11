@@ -1,6 +1,6 @@
 ---
-title: "WebXR Layers Start!"
-author: "John Hall"
+title: "Lake Champlain WebXR Portal"
+author: "dancingfrog"
 execute:
   echo: true
   output: true
@@ -11,7 +11,7 @@ format:
     toc: false
 ---
 
-This is a simple starter app for a WebXR Layers project. I've seen some examples where developers in-the-know effortlessly incorporate WebXR Layers into their app, some of which are sampled here, but I haven't come across any demonstrating a practical boiler plate and usage of WebXR Layers. This is my attempt...
+Immersive WebXR experience for the Lake Champlain region, built with Vite and Three.js. The app layers terrain, media, and interaction patterns adapted from WebXR Layers examples and starter work from the broader WebXR community.
 
 ## Configuration
 
