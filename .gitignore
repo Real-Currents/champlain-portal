@@ -29,11 +29,15 @@ dist-ssr
 .Rproj.user
 .Rhistory
 
-data/
-_targets/
 *.bak
 *.csv
 *.xlsx
 
-public/assets/videos
+CLAUDE*
+data/
+docs/
+scripts/
+public/assets
 public/verge3d-code-examples
+ui/
+_targets/
