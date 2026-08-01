@@ -48,5 +48,10 @@ export default function setupGridEnvironment (scene, gridParent = scene) {
     rightWall.material.transparent = true;
     gridParent.add(rightWall);
 
-    return { floorGrid, backWall, leftWall, rightWall };
+    gridParent.gridMeshes = { floorGrid, backWall, leftWall, rightWall };
+
+    return {
+        meshes: { floorGrid, backWall, leftWall, rightWall },
+        initialState: { speed: 1.5, maxOffset: 5.0 }
+    };
 }

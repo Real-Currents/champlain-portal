@@ -46,7 +46,7 @@ export function getViewerMidpoint (renderer, frame, target = _vMid) {
  * @param {THREE.Vector3 | null} V
  * @param {boolean} enabled
  */
-export function updateStationaryGroup (group, V, enabled) {
+export function updateStationaryGroup (group, V, enabled, offset = null) {
 
     if (!enabled || !V) {
 
@@ -55,6 +55,7 @@ export function updateStationaryGroup (group, V, enabled) {
     } else {
 
         group.position.copy(V);
+        if (offset) group.position.add(offset);
 
     }
 
@@ -67,16 +68,17 @@ export function updateStationaryGroup (group, V, enabled) {
  * @param {XRQuadLayer} layer
  * @param {{ x: number, y: number, z: number }} basePosition - authored W (layer-local offset)
  * @param {THREE.Vector3} V
+ * @param {THREE.Vector3 | null} [videoOffset] - additional designer offset in world Z
  */
-export function updateVideoQuadLayerPosition (layer, basePosition, V) {
+export function updateVideoQuadLayerPosition (layer, basePosition, V, videoOffset = null) {
 
     if (!layer || !basePosition || !V) return;
 
     layer.transform = new XRRigidTransform(
         {
-            x: basePosition.x + V.x,
-            y: basePosition.y + V.y,
-            z: basePosition.z + V.z
+            x: basePosition.x + V.x + (videoOffset ? videoOffset.x : 0),
+            y: basePosition.y + V.y + (videoOffset ? videoOffset.y : 0),
+            z: basePosition.z + V.z + (videoOffset ? videoOffset.z : 0)
         },
         { x: 0, y: 0, z: 0, w: 1 }
     );

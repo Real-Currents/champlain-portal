@@ -21,7 +21,7 @@ export default function createSubtitlePanel(initialText = "Welcome...") {
     const panelWidth = 1.4;
     const panelHeight = 0.25;
     const followDistance = 1.5;
-    const verticalOffset = -0.25;
+    const verticalOffset = 0;
     const lerpFactor = 0.08;
 
     // Panel background mesh

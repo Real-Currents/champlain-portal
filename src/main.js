@@ -22,6 +22,11 @@ import {
     updateVideoQuadLayerPosition,
     isStationaryGridEnabled
 } from "./xr/stationaryView";
+import { World } from "./ecs/World";
+import { GridTransform } from "./ecs/components/GridTransform";
+import { VideoLayerTransform } from "./ecs/components/VideoLayerTransform";
+import { GridMovementSystem } from "./ecs/systems/GridMovementSystem";
+import { VideoLayerMovementSystem } from "./ecs/systems/VideoLayerMovementSystem";
 
 let currentSession = null;
 let initXRLayers = true;
@@ -90,6 +95,7 @@ setTimeout(function init () {
     const scene = new THREE.Scene();
     /** Grid + WebGL stereo video only; position = viewer translation V each frame when stationary mode is on. */
     const stationaryContent = new THREE.Group();
+    stationaryContent.edit = true;
     scene.add(stationaryContent);
 
     const stationaryGridEnabled = isStationaryGridEnabled();
@@ -179,7 +185,7 @@ setTimeout(function init () {
 
     // 6th arg `videoCenterY`: WebGL stereo mesh vertical offset (see 4efab14 "Vertically recenter video mesh layer").
     // XRQuadLayer Y uses VIDEO_QUAD_LAYER_Y_OFFSET_METERS in setupVideoLayerManager (separate from mesh).
-    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710, 0.0, -2.0);
+    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710);
 
     container.append(loadManager.div);
 
@@ -194,9 +200,23 @@ setTimeout(function init () {
         videoLayerManager.initVideoLayer(false, renderer, scene, currentSession, null, stationaryContent);
 
         // Grid environment: dark void with cyan Euclidean grid (under stationaryContent with video mesh)
-        setupGridEnvironment(scene, stationaryContent);
+        const gridResult = setupGridEnvironment(scene, stationaryContent);
 
-        const updateScene = await setupScene(scene, camera, controllers, player, videoLayerManager);
+        // ECS world for persistent spatial state — lightweight, no framework migration needed
+        const world = new World();
+
+        const gridEntity = world.createEntity('stationaryGrid');
+        world.addComponent(gridEntity, GridTransform.type, GridTransform.create({
+            ...gridResult.initialState,
+            // maxOffset: 10.0
+        }));
+        world.registerSystem(new GridMovementSystem(controllers, stationaryContent));
+
+        const videoEntity = world.createEntity('videoLayer');
+        world.addComponent(videoEntity, VideoLayerTransform.type, VideoLayerTransform.create());
+        world.registerSystem(new VideoLayerMovementSystem(controllers, stationaryContent));
+
+        const updateScene = await setupScene(scene, camera, controllers, player, stationaryContent, videoLayerManager);
 
         // Subtitle panel: head-locked with smooth-follow physics
         subtitlePanel = createSubtitlePanel("Welcome...");
@@ -204,7 +224,7 @@ setTimeout(function init () {
 
         renderer.setAnimationLoop(function render (t, frame ) {
 
-            const data = {};
+            const data = [];
             const delta = clock.getDelta();
             const time = clock.getElapsedTime();
 
@@ -256,16 +276,40 @@ setTimeout(function init () {
 
             waiting_for_confirmation = checkControllerAction(controllers, data, currentSession, waiting_for_confirmation);
 
+            if (Array.isArray(data) && data.length > 0) {
+                for (const event of data) {
+                    if (event.action === "toggle_grid") {
+                        const gt = world.getComponent('stationaryGrid', 'GridTransform');
+                        if (gt) {
+                            gt.showGrid = !gt.showGrid;
+                            stationaryContent.edit = gt.showGrid;
+                        }
+                    }
+                }
+            }
+
+            world.update(delta);
+            const gridTransform = world.getComponent('stationaryGrid', 'GridTransform');
+            const videoTransform = world.getComponent('videoLayer', 'VideoLayerTransform');
+            const gridOffset = gridTransform?.offset || null;
+            const videoOffset = videoTransform?.offset || null;
+
             const stationaryActive = stationaryGridEnabled && xr.isPresenting && currentSession !== null;
             const viewerMid = getViewerMidpoint(renderer, frame);
-            updateStationaryGroup(stationaryContent, viewerMid, stationaryActive);
+            updateStationaryGroup(stationaryContent, viewerMid, stationaryActive, gridOffset);
+
+            // Apply independent video offset to WebGL stereo mesh
+            if (videoOffset && videoLayerManager.webGLVideo) {
+                videoLayerManager.webGLVideo.position.copy(videoOffset);
+            }
 
             if (stationaryActive && xrLayerQuadVideo !== null && viewerMid) {
 
                 updateVideoQuadLayerPosition(
                     xrLayerQuadVideo,
                     videoLayerManager.videoQuadLayerBasePosition,
-                    viewerMid
+                    viewerMid,
+                    videoOffset
                 );
 
             }
@@ -327,7 +371,7 @@ setTimeout(function init () {
                 currentSession,
                 delta,
                 time,
-                (data.hasOwnProperty("action")) ? data : null,
+                data.length > 0 ? data : null,
                 null
                 //, [
                 //     ...clippingPlanes

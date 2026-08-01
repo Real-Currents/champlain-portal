@@ -28,9 +28,11 @@ export function checkControllerAction(controllers, data, session, waiting = wait
                 waiting_for_confirmation = false;
             }
 
-            data.action = `Trigger on right controller was activated: ${XR_BUTTONS.TRIGGER}`;
-            data.controller_vector = controller_vector;
-            data.waiting_for_confirmation = waiting_for_confirmation;
+            data.push({
+                action: `Trigger on right controller was activated: ${XR_BUTTONS.TRIGGER}`,
+                controller_vector,
+                waiting_for_confirmation
+            });
 
         } else if (gamepad.getButtonClick(XR_BUTTONS.BUTTON_1)) {
             console.log("BUTTON_1 (A) on right controller was activated:", XR_BUTTONS.BUTTON_1, gamepad);
@@ -40,8 +42,10 @@ export function checkControllerAction(controllers, data, session, waiting = wait
 
                 console.log("End session");
 
-                data.action = "End session confirmed";
-                data.waiting_for_confirmation = waiting_for_confirmation;
+                data.push({
+                    action: "End session confirmed",
+                    waiting_for_confirmation
+                });
                 session.end();
             }
 
@@ -51,14 +55,18 @@ export function checkControllerAction(controllers, data, session, waiting = wait
             if (!!waiting) {
                 console.log("Cancel action");
                 waiting_for_confirmation = false;
-                data.action = "End session cancelled";
+                data.push({
+                    action: "End session cancelled",
+                    waiting_for_confirmation
+                });
             } else {
                 console.log("Waiting for confirmation...")
                 waiting_for_confirmation = true;
-                data.action = "End session initiated";
+                data.push({
+                    action: "End session initiated",
+                    waiting_for_confirmation
+                });
             }
-
-            data.waiting_for_confirmation = waiting_for_confirmation;
 
         } else {
             for (const b in XR_BUTTONS) {
@@ -71,8 +79,6 @@ export function checkControllerAction(controllers, data, session, waiting = wait
                             console.log("Cancel action");
                             waiting_for_confirmation = false;
                         }
-
-                        data.waiting_for_confirmation = waiting_for_confirmation;
                     }
                 }
             }
@@ -96,9 +102,11 @@ export function checkControllerAction(controllers, data, session, waiting = wait
                 waiting_for_confirmation = false;
             }
 
-            data.action = `Trigger on left controller was activated: ${XR_BUTTONS.TRIGGER}`;
-            data.controller_vector = controller_vector;
-            data.waiting_for_confirmation = waiting_for_confirmation;
+            data.push({
+                action: `Trigger on left controller was activated: ${XR_BUTTONS.TRIGGER}`,
+                controller_vector,
+                waiting_for_confirmation
+            });
 
         } else if (gamepad.getButtonClick(XR_BUTTONS.BUTTON_1)) {
             console.log("BUTTON_1 (X) on left controller was activated:", XR_BUTTONS.BUTTON_1, gamepad);
@@ -108,8 +116,6 @@ export function checkControllerAction(controllers, data, session, waiting = wait
                 waiting_for_confirmation = false;
             }
 
-            data.waiting_for_confirmation = waiting_for_confirmation;
-
         } else if (gamepad.getButtonClick(XR_BUTTONS.BUTTON_2)) {
             console.log("BUTTON_2 (Y) on left controller was activated:", XR_BUTTONS.BUTTON_2, gamepad);
 
@@ -118,7 +124,10 @@ export function checkControllerAction(controllers, data, session, waiting = wait
                 waiting_for_confirmation = false;
             }
 
-            data.waiting_for_confirmation = waiting_for_confirmation;
+            data.push({
+                action: "toggle_grid",
+                waiting_for_confirmation
+            });
 
         } else {
             for (const b in XR_BUTTONS) {
@@ -131,8 +140,6 @@ export function checkControllerAction(controllers, data, session, waiting = wait
                             console.log("Cancel action");
                             waiting_for_confirmation = false;
                         }
-
-                        data.waiting_for_confirmation = waiting_for_confirmation;
                     }
                 }
             }

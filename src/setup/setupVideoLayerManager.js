@@ -30,8 +30,8 @@ export default function setupVideoLayerManager (
     videoHeight = 2208,
     videoReducer = 0.090579710,
     videoCenterX = 0.0,
-    videoCenterY = 0.0,
-    videoDepthZ = -2.5,
+    videoCenterY = -2.0,
+    videoDepthZ = -7.5,
     meshWidth = 5
 ) {
 

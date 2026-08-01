@@ -3,6 +3,8 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 
 import loadManager from "../setup/setupLoadManager";
 
+import rotatingCube from "../objects/rotatingCube";
+
 const gltfLoader = new GLTFLoader(loadManager);
 
 const gloveGroup_01 = new THREE.Group();
@@ -13,6 +15,7 @@ export default async function setupScene (
     camera,
     controllers,
     player,
+    stationaryContent,
     videoLayerManager
 ) {
 
@@ -50,6 +53,12 @@ export default async function setupScene (
     sceneGroup.translateY(sceneY);
     sceneGroup.translateZ(sceneZ);
 
+    // Place objects
+    // rotatingCube.position.copy(sceneDataIn.spawnPosition || new THREE.Vector3(0, 0, -2));
+    rotatingCube.position.copy(new THREE.Vector3(0.0, 0.5, -5.0));
+    rotatingCube.name = "spawned-box-" + Date.now();
+    stationaryContent.add(rotatingCube);
+
     return function updateScene (currentSession, delta, time, sceneDataIn, sceneDataOut) {
 
         const data_out = {
@@ -82,12 +91,16 @@ export default async function setupScene (
             }
         }
 
-        if (typeof sceneDataIn === "object" && sceneDataIn != null) {
-            console.log("sceneDataIn:", sceneDataIn);
-
-            if (sceneDataIn.hasOwnProperty("action")) {
-                if (sceneDataIn["action"] === "start_video") {
+        if (Array.isArray(sceneDataIn) && sceneDataIn.length > 0) {
+            for (const event of sceneDataIn) {
+                if (event.action === "start_video") {
                     videoLayerManager.video.play();
+                } else if (event.action === "toggle_grid") {
+                    if (stationaryContent.gridMeshes) {
+                        Object.values(stationaryContent.gridMeshes).forEach(mesh => {
+                            mesh.visible = !mesh.visible;
+                        });
+                    }
                 }
             }
         }
@@ -95,5 +108,16 @@ export default async function setupScene (
         if (typeof sceneDataOut === "function") {
             sceneDataOut(data_out);
         }
+
+        // Dynamic object spawn pattern for stationaryContent
+        // 1. Spawn via command: check sceneDataIn.action or controller state, create geometry+material,
+        //    set mesh.name, then stationaryContent.add(mesh).
+        // 2. Track in a local Map inside setupScene: const dynamicObjects = new Map(); // name -> Object3D
+        // 3. Update/animate/remove each frame: dynamicObjects.forEach((mesh) => { ... })
+        // 4. Preserve existing children: never set stationaryContent.visible = false globally.
+        //    Target specific children only (by name, userData, or via stationaryContent.gridMeshes).
+
+        rotatingCube.rotX(0.01);
+        rotatingCube.rotY(0.01);
     }
 }
