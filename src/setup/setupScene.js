@@ -94,7 +94,7 @@ export default async function setupScene (
         if (Array.isArray(sceneDataIn) && sceneDataIn.length > 0) {
             for (const event of sceneDataIn) {
                 if (event.action === "start_video") {
-                    videoLayerManager.video.play();
+                    videoLayerManager.playVideo();
                 } else if (event.action === "toggle_grid") {
                     if (stationaryContent.gridMeshes) {
                         Object.values(stationaryContent.gridMeshes).forEach(mesh => {

@@ -179,13 +179,14 @@ setTimeout(function init () {
     // video.height = previewWindow.height;
     // video.play();
 
+    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710);
+
     container.addEventListener( 'click', function () {
-        video.play();
+        videoLayerManager.playVideo();
     });
 
     // 6th arg `videoCenterY`: WebGL stereo mesh vertical offset (see 4efab14 "Vertically recenter video mesh layer").
     // XRQuadLayer Y uses VIDEO_QUAD_LAYER_Y_OFFSET_METERS in setupVideoLayerManager (separate from mesh).
-    videoLayerManager = setupVideoLayerManager(video, 2064, 2208, 0.090579710);
 
     container.append(loadManager.div);
 
@@ -500,7 +501,7 @@ setTimeout(function init () {
 
         }
 
-        video.play();
+        videoLayerManager.playVideo();
     }
 
     function onSessionEnded (session) {

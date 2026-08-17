@@ -230,12 +230,18 @@ export default function setupVideoLayerManager (
         textureUpdateInterval = 0;
     }
 
+    function playVideo () {
+        video.muted = false;
+        return video.play();
+    }
+
     return (
         Object.defineProperty(
             Object.defineProperty(
                 {
                     initVideoLayer,
                     clearVideoLayer,
+                    playVideo,
                     webGLVideo,
                     webXRLayerVideo,
                     get videoQuadLayerBasePosition () {
