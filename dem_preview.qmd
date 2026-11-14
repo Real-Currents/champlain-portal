@@ -1,0 +1,111 @@
+---
+title: "Lake Champlain DEM Preview"
+author: "dancingfrog"
+execute:
+  echo: false
+  message: false
+  warning: false
+format:
+  html:
+    embed-resources: true
+    toc: true
+    include-in-header:
+      - text: |
+          <style>
+          .quarto-figure img, img.knitr-img { width: 100%; max-width: 100%; height: auto; }
+          </style>
+---
+
+```{r setup}
+library(terra)
+library(rayshader)
+library(targets)
+source("R/dem_functions.R")
+```
+
+Interactive 3D previews of the digital elevation model sections that feed the Blender Lake Champlain scene. Each section is cropped around the source-video camera at **44.198689 N, -73.358142 W** (Vermont shore, looking northwest) and rendered with `rayshader`.
+
+## Data Sources & Scene Metadata
+
+This document previews elevation data used as source material for a 3D world generation pipeline targeting a photorealistic recreation of the Lake Champlain shoreline environment.
+
+### Geographic Location
+
+**Scene anchor:** 44.198689°N, 73.358142°W — Vermont eastern shore of Lake Champlain, looking northwest toward the Adirondack Mountains of New York.
+
+Lake Champlain lies on the Vermont–New York border and extends ~193 km (120 mi) north into Quebec, Canada. The scene anchor sits at the edge of a shallow cove near the town of Charlotte, VT (Chittenden County). Lake surface elevation is approximately **29.5 m (96.7 ft) above mean sea level**.
+
+### Elevation Data
+
+| Layer | Source | Resolution | CRS | Coverage |
+|---|---|---|---|---|
+| Near-shore | DEMHF 0.7m (Vermont Agency of Transportation, 2016–2017) | 0.7 m | Vermont State Plane (EPSG:32145) | Vermont near-shore strip, tiled as `Elevation_DEMHF0p7M2017_*.img` |
+| Lake horizon, Adirondacks, Full scene | SRTM GL1 (NASA/USGS, 2000) | ~30 m | WGS84 geographic (EPSG:4326) | 1°×1° tile `N44W074.SRTMGL1.hgt` covering 44–45°N, 74–73°W |
+
+Both sources are reprojected to **UTM Zone 18N (EPSG:32618)** by the ETL pipeline before export. The DEMHF tiles cover only the Vermont bank at high resolution; the SRTM tile provides regional context including the full lake basin and the Adirondack ridgeline on the New York side.
+
+### Satellite Imagery
+
+Aerial imagery overlaid on all sections is fetched live from **Esri World Imagery** (ArcGIS Online) via the `maptiles` R package. Imagery is reprojected and resampled to match each DEM tile's extent and resolution at render time. Source imagery is high-resolution aerial photography (sub-meter in most areas) with a nominal capture date in the 2010s for this region.
+
+### Pipeline Role
+
+These DEMs feed two downstream products in the world generation pipeline:
+
+1. **Blender displacement heightmaps** — exported as 16-bit grayscale PNG via `export_dem_png()`, with a JSON sidecar recording `z_min`, `z_max`, pixel size, and CRS so that the real elevation range can be reconstructed as a Blender displacement Z-scale.
+
+2. **3D scene geometry** — the near-shore DEMHF provides ground-truth surface geometry for camera-ray projection of foreground objects (dead trees, dock, submerged logs); the SRTM tile provides the lake basin and far-shore topography visible in the background.
+
+**Primary Blender file:** `public/assets/Lake_Champlain.blend` (`LakeChamplain3D` scene)
+
+---
+
+## Interactive preview
+
+Run the ETL pipeline first so the cropped DEMs exist in the `targets` store:
+
+```r
+targets::tar_make()
+```
+
+### Near-shore (0.7m DEMHF)
+
+The immediate Vermont bank, treeline, and water edge — the foreground the camera-projected meshes sit on.
+
+```{r near-shore}
+near_utm <- terra::rast(tar_read(near_dem_utm_tif))
+near <- crop_dem_to_radius(near_utm, -73.358142, 44.198689, 500)
+preview_dem_section(near, title = "Near-shore (0.7m)", zscale = 10, waterdepth = 29.5, satellite = TRUE)
+```
+
+### Lake horizon (30m SRTM)
+
+The full lake surface and far shore visible from the camera out to ~6 km.
+
+```{r lake-horizon}
+options(rgl.useNULL = TRUE)
+far_utm <- terra::rast(tar_read(far_dem_utm_tif))
+lake <- crop_dem_to_radius(far_utm, -73.358142, 44.198689, 6000)
+preview_dem_section(lake, title = "Lake horizon (30m)", zscale = 25, waterdepth = 29.5, satellite = TRUE)
+```
+
+### Adirondack ridgeline (30m SRTM)
+
+The New York mountain range across the lake — the dominant mid/far-ground feature in the northwest view.
+
+```{r adirondacks}
+options(rgl.useNULL = TRUE)
+adk <- crop_dem_to_radius(far_utm, -73.55, 44.25, 5000)
+preview_dem_section(adk, title = "Adirondack ridgeline (30m)", zscale = 50, water = FALSE, satellite = TRUE)
+```
+
+### Full scene (30m SRTM, 15 km)
+
+Both shores and the lake basin combined — the extent used for the far terrainheightmap export.
+
+```{r full-scene}
+options(rgl.useNULL = TRUE)
+full <- crop_dem_to_radius(far_utm, -73.358142, 44.198689, 15000)
+preview_dem_section(full, title = "Full scene (15 km)", zscale = 50, waterdepth = 29.5, satellite = TRUE)
+```
+
